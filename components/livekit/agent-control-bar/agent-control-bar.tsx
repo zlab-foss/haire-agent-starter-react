@@ -45,6 +45,8 @@ export function AgentControlBar({
   const isAgentAvailable = participants.some((p) => p.isAgent);
   const isInputDisabled = !chatOpen || !isAgentAvailable || isSendingMessage;
 
+  const [isDisconnecting, setIsDisconnecting] = React.useState(false);
+
   const {
     micTrackRef,
     visibleControls,
@@ -68,8 +70,10 @@ export function AgentControlBar({
     }
   };
 
-  const onLeave = () => {
-    handleDisconnect();
+  const onLeave = async () => {
+    setIsDisconnecting(true);
+    await handleDisconnect();
+    setIsDisconnecting(false);
     onDisconnect?.();
   };
 
@@ -213,7 +217,12 @@ export function AgentControlBar({
           )}
         </div>
         {visibleControls.leave && (
-          <Button variant="destructive" onClick={onLeave} className="font-mono">
+          <Button
+            variant="destructive"
+            onClick={onLeave}
+            disabled={isDisconnecting}
+            className="font-mono"
+          >
             <PhoneDisconnectIcon weight="bold" />
             <span className="hidden md:inline">END CALL</span>
             <span className="inline md:hidden">END</span>
