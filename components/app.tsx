@@ -1,9 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Room, RoomEvent } from 'livekit-client';
 import { motion } from 'motion/react';
-import { RoomAudioRenderer, RoomContext, StartAudio } from '@livekit/components-react';
+import {
+  RoomAudioRenderer,
+  RoomContext,
+  StartAudio,
+  useRoomConnection,
+} from '@livekit/components-react';
 import { toastAlert } from '@/components/alert-toast';
 import { SessionView } from '@/components/session-view';
 import { Toaster } from '@/components/ui/sonner';
@@ -19,9 +24,23 @@ interface AppProps {
 }
 
 export function App({ appConfig }: AppProps) {
-  const room = useMemo(() => new Room(), []);
   const [sessionStarted, setSessionStarted] = useState(false);
   const { connectionDetails, refreshConnectionDetails } = useConnectionDetails();
+
+  const { status, room } = useRoomConnection({
+    getConnectionDetails: useCallback(async () => connectionDetails!, [connectionDetails]),
+    onConnectionError: useCallback((error: Error) => {
+      toastAlert({
+        title: 'There was an error connecting to the agent',
+        description: `${error.name}: ${error.message}`,
+      });
+    }, []),
+
+    connected: connectionDetails !== null && sessionStarted,
+    trackPublishOptions: {
+      preConnectBuffer: appConfig.isPreConnectBufferEnabled,
+    },
+  });
 
   useEffect(() => {
     const onDisconnected = () => {
