@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Room, RoomEvent } from 'livekit-client';
 import { motion } from 'motion/react';
 import {
+  LiveKitRoom,
   RoomAudioRenderer,
   RoomContext,
   StartAudio,
@@ -27,69 +28,22 @@ export function App({ appConfig }: AppProps) {
   const [sessionStarted, setSessionStarted] = useState(false);
   const { connectionDetails, refreshConnectionDetails } = useConnectionDetails();
 
-  const { status, room } = useRoomConnection({
-    getConnectionDetails: useCallback(async () => connectionDetails!, [connectionDetails]),
-    onConnectionError: useCallback((error: Error) => {
-      toastAlert({
-        title: 'There was an error connecting to the agent',
-        description: `${error.name}: ${error.message}`,
-      });
-    }, []),
-
-    connected: connectionDetails !== null && sessionStarted,
-    trackPublishOptions: {
+  const enableMicrophonePreConnectBuffer = useCallback(async (room: Room) => {
+    room.localParticipant.setMicrophoneEnabled(true, undefined, {
       preConnectBuffer: appConfig.isPreConnectBufferEnabled,
-    },
-  });
+    });
+  }, []);
 
-  useEffect(() => {
-    const onDisconnected = () => {
-      setSessionStarted(false);
-      refreshConnectionDetails();
-    };
-    const onMediaDevicesError = (error: Error) => {
-      toastAlert({
-        title: 'Encountered an error with your media devices',
-        description: `${error.name}: ${error.message}`,
-      });
-    };
-    room.on(RoomEvent.MediaDevicesError, onMediaDevicesError);
-    room.on(RoomEvent.Disconnected, onDisconnected);
-    return () => {
-      room.off(RoomEvent.Disconnected, onDisconnected);
-      room.off(RoomEvent.MediaDevicesError, onMediaDevicesError);
-    };
-  }, [room, refreshConnectionDetails]);
-
-  useEffect(() => {
-    let aborted = false;
-    if (sessionStarted && room.state === 'disconnected' && connectionDetails) {
-      Promise.all([
-        room.localParticipant.setMicrophoneEnabled(true, undefined, {
-          preConnectBuffer: appConfig.isPreConnectBufferEnabled,
-        }),
-        room.connect(connectionDetails.serverUrl, connectionDetails.participantToken),
-      ]).catch((error) => {
-        if (aborted) {
-          // Once the effect has cleaned up after itself, drop any errors
-          //
-          // These errors are likely caused by this effect rerunning rapidly,
-          // resulting in a previous run `disconnect` running in parallel with
-          // a current run `connect`
-          return;
-        }
-
-        toastAlert({
-          title: 'There was an error connecting to the agent',
-          description: `${error.name}: ${error.message}`,
-        });
-      });
-    }
-    return () => {
-      aborted = true;
-      room.disconnect();
-    };
-  }, [room, sessionStarted, connectionDetails, appConfig.isPreConnectBufferEnabled]);
+  const onDisconnected = useCallback(() => {
+    setSessionStarted(false);
+    refreshConnectionDetails();
+  }, [refreshConnectionDetails]);
+  const onMediaDeviceFailure = useCallback((error: Error) => {
+    toastAlert({
+      title: 'Encountered an error with your media devices',
+      description: `${error.name}: ${error.message}`,
+    });
+  }, []);
 
   const { startButtonText } = appConfig;
 
@@ -105,7 +59,14 @@ export function App({ appConfig }: AppProps) {
         transition={{ duration: 0.5, ease: 'linear', delay: sessionStarted ? 0 : 0.5 }}
       />
 
-      <RoomContext.Provider value={room}>
+      <LiveKitRoom
+        connect={sessionStarted && connectionDetails !== null}
+        token={connectionDetails?.participantToken!}
+        serverUrl={connectionDetails?.serverUrl!}
+        connectionSideEffect={enableMicrophonePreConnectBuffer}
+        onDisconnected={onDisconnected}
+        onMediaDeviceFailure={onMediaDeviceFailure}
+      >
         <RoomAudioRenderer />
         <StartAudio label="Start Audio" />
         {/* --- */}
@@ -122,7 +83,7 @@ export function App({ appConfig }: AppProps) {
             delay: sessionStarted ? 0.5 : 0,
           }}
         />
-      </RoomContext.Provider>
+      </LiveKitRoom>
 
       <Toaster />
     </>
