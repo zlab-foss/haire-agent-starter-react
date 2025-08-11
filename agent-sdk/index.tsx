@@ -40,7 +40,7 @@ export function useAgentMessages() {
     Array<ReceivedMessage | SentMessage>
   >(agentSession.messages);
   useEffect(() => {
-    let aggregator: ReceivedMessageAggregator | null = null;
+    let aggregator: ReceivedMessageAggregator<ReceivedMessage> | null = null;
 
     const handleUpdated = () => {
       if (!aggregator) {
@@ -58,6 +58,7 @@ export function useAgentMessages() {
     });
 
     return () => {
+      aggregator?.close();
       aggregator?.off(ReceivedMessageAggregatorEvent.Updated, handleUpdated);
     };
   }, [agentSession]);

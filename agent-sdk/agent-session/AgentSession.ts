@@ -271,6 +271,10 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
     return this.defaultAggregator?.toArray() ?? [];
   }
 
+  /**
+    * Create a ReceivedMessageAggregator, which allows one to view a snapshot of all received
+    * messages at the current time.
+    */
   async createMessageAggregator(options: { startsAt?: 'beginning' | 'now' } & ReceivedMessageAggregatorOptions = {}) {
     await this.waitUntilRoomConnected();
     if (!this.aggregators) {
