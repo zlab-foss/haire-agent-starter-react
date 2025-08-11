@@ -14,22 +14,22 @@ export type AgentState =
   | 'thinking'
   | 'speaking';
 
-export enum AgentParticipantEvent {
+export enum AgentEvent {
   VideoTrackChanged = 'videoTrackChanged',
   AudioTrackChanged = 'videoTrackChanged',
   AgentAttributesChanged = 'agentAttributesChanged',
   AgentStateChanged = 'agentStateChanged',
 }
 
-export type AgentParticipantCallbacks = {
-  [AgentParticipantEvent.VideoTrackChanged]: (newTrack: TrackReference | null) => void;
-  [AgentParticipantEvent.AudioTrackChanged]: (newTrack: TrackReference | null) => void;
-  [AgentParticipantEvent.AgentAttributesChanged]: (newAttributes: Record<string, string>) => void;
-  [AgentParticipantEvent.AgentStateChanged]: (newState: AgentState) => void;
+export type AgentCallbacks = {
+  [AgentEvent.VideoTrackChanged]: (newTrack: TrackReference | null) => void;
+  [AgentEvent.AudioTrackChanged]: (newTrack: TrackReference | null) => void;
+  [AgentEvent.AgentAttributesChanged]: (newAttributes: Record<string, string>) => void;
+  [AgentEvent.AgentStateChanged]: (newState: AgentState) => void;
 };
 
 /** Encapsulates all agent state / complexity */
-export default class AgentParticipant extends (EventEmitter as new () => TypedEventEmitter<AgentParticipantCallbacks>) {
+export default class Agent extends (EventEmitter as new () => TypedEventEmitter<AgentCallbacks>) {
   private room: Room;
   state: AgentState = 'disconnected';
 
@@ -119,7 +119,7 @@ export default class AgentParticipant extends (EventEmitter as new () => TypedEv
     );
     if (this.videoTrack !== newVideoTrack) {
       this.videoTrack = newVideoTrack;
-      this.emit(AgentParticipantEvent.VideoTrackChanged, newVideoTrack);
+      this.emit(AgentEvent.VideoTrackChanged, newVideoTrack);
     }
 
     const newAudioTrack = (
@@ -128,13 +128,13 @@ export default class AgentParticipant extends (EventEmitter as new () => TypedEv
     );
     if (this.audioTrack !== newAudioTrack) {
       this.audioTrack = newAudioTrack;
-      this.emit(AgentParticipantEvent.AudioTrackChanged, newAudioTrack);
+      this.emit(AgentEvent.AudioTrackChanged, newAudioTrack);
     }
   };
 
   private handleAttributesChanged = (attributes: Record<string, string>) => {
     this.attributes = attributes;
-    this.emit(AgentParticipantEvent.AgentAttributesChanged, attributes);
+    this.emit(AgentEvent.AgentAttributesChanged, attributes);
     this.updateAgentState();
   };
 
@@ -157,7 +157,7 @@ export default class AgentParticipant extends (EventEmitter as new () => TypedEv
 
     if (this.state !== newAgentState) {
       this.state = newAgentState;
-      this.emit(AgentParticipantEvent.AgentStateChanged, newAgentState);
+      this.emit(AgentEvent.AgentStateChanged, newAgentState);
     }
   }
 

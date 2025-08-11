@@ -1,7 +1,6 @@
 import * as React from "react";
 import { useContext, useEffect, useState, useCallback, useMemo } from "react";
 import {
-    LocalParticipant,
   Participant,
   ParticipantEvent,
   Track,
@@ -12,7 +11,7 @@ import { TrackReference, trackSourceToProtocol } from "@/agent-sdk/external-deps
 import { ParticipantEventCallbacks } from "../node_modules/livekit-client/src/room/participant/Participant";
 import { AgentSession, AgentSessionCallbacks, AgentSessionEvent } from "./agent-session/AgentSession";
 import { ReceivedMessage, ReceivedMessageAggregator, ReceivedMessageAggregatorEvent, SentMessage } from "./agent-session/message";
-import { AgentParticipantCallbacks, AgentParticipantEvent } from "./agent-session/AgentParticipant";
+import { AgentCallbacks, AgentEvent } from "./agent-session/Agent";
 import { ParticipantPermission } from "livekit-server-sdk";
 
 // ---------------------
@@ -89,9 +88,9 @@ export function useAgentSessionEvent<EventName extends keyof AgentSessionCallbac
   }, [eventName, memoizedCallback]);
 }
 
-export function useAgentParticipantEvent<EventName extends keyof AgentParticipantCallbacks>(
+export function useAgentEvent<EventName extends keyof AgentCallbacks>(
   eventName: EventName,
-  callback: AgentParticipantCallbacks[EventName],
+  callback: AgentCallbacks[EventName],
   dependencies: React.DependencyList,
 ) {
   const agentSession = useAgentSession();
@@ -100,16 +99,16 @@ export function useAgentParticipantEvent<EventName extends keyof AgentParticipan
   const memoizedCallback = useCallback(callback, dependencies);
 
   useEffect(() => {
-    if (!agentSession.agentParticipant) {
+    if (!agentSession.agent) {
       return;
     }
 
-    const agentParticipant = agentSession.agentParticipant;
-    agentParticipant.on(eventName, memoizedCallback);
+    const agent = agentSession.agent;
+    agent.on(eventName, memoizedCallback);
     return () => {
-      agentParticipant.off(eventName, memoizedCallback);
+      agent.off(eventName, memoizedCallback);
     };
-  }, [agentSession.agentParticipant, eventName, memoizedCallback]);
+  }, [agentSession.agent, eventName, memoizedCallback]);
 }
 
 export function useAgentState() {
@@ -128,10 +127,10 @@ export function useAgentState() {
 export function useAgentTracks() {
   const agentSession = useAgentSession();
 
-  const [audioTrack, setAudioTrack] = useState(agentSession.agentParticipant?.audioTrack ?? null);
-  useAgentParticipantEvent(AgentParticipantEvent.AudioTrackChanged, setAudioTrack, []);
-  const [videoTrack, setVideoTrack] = useState(agentSession.agentParticipant?.videoTrack ?? null);
-  useAgentParticipantEvent(AgentParticipantEvent.VideoTrackChanged, setVideoTrack, []);
+  const [audioTrack, setAudioTrack] = useState(agentSession.agent?.audioTrack ?? null);
+  useAgentEvent(AgentEvent.AudioTrackChanged, setAudioTrack, []);
+  const [videoTrack, setVideoTrack] = useState(agentSession.agent?.videoTrack ?? null);
+  useAgentEvent(AgentEvent.VideoTrackChanged, setVideoTrack, []);
 
   return { audioTrack, videoTrack };
 }

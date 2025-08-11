@@ -15,7 +15,7 @@ import {
   type ReceivedMessageAggregatorOptions,
   ReceivedMessageAggregatorEvent,
 } from "./message";
-import AgentParticipant, { AgentParticipantEvent, AgentState } from './AgentParticipant';
+import Agent, { AgentEvent, AgentState } from './Agent';
 
 export enum AgentSessionEvent {
   AgentStateChanged = 'agentStateChanged',
@@ -40,7 +40,7 @@ export type AgentSessionCallbacks = {
 export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<AgentSessionCallbacks>) {
   room: Room; // FIXME: should this be private?
 
-  agentParticipant: AgentParticipant | null = null;
+  agent: Agent | null = null;
   messageSender: MessageSender | null = null;
   messageReceiver: MessageReceiver | null = null;
   defaultAggregator: ReceivedMessageAggregator<ReceivedMessage> | null = null;
@@ -71,8 +71,8 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
 
   private handleRoomConnected = () => {
     console.log('!! CONNECTED');
-    this.agentParticipant = new AgentParticipant(this.room);
-    this.agentParticipant.on(AgentParticipantEvent.AgentStateChanged, this.handleAgentStateChanged);
+    this.agent = new Agent(this.room);
+    this.agent.on(AgentEvent.AgentStateChanged, this.handleAgentStateChanged);
 
     const chatMessageSender = new ChatMessageSender(this.localParticipant);
     this.messageSender = new CombinedMessageSender(
@@ -101,9 +101,9 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
 
   private handleRoomDisconnected = () => {
     console.log('!! DISCONNECTED');
-    this.agentParticipant?.off(AgentParticipantEvent.AgentStateChanged, this.handleAgentStateChanged);
-    this.agentParticipant?.teardown();
-    this.agentParticipant = null;
+    this.agent?.off(AgentEvent.AgentStateChanged, this.handleAgentStateChanged);
+    this.agent?.teardown();
+    this.agent = null;
 
     this.messageReceiver?.close();
     this.messageReceiver = null;
@@ -161,7 +161,7 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
   }
 
   get state() {
-    return this.agentParticipant?.state ?? 'disconnected';
+    return this.agent?.state ?? 'disconnected';
   }
 
   get isAvailable() {
