@@ -56,7 +56,6 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
   }
 
   async connect(url: string, token: string) {
-    // FIXME: catch connection errors here and reraise? idk
     await Promise.all([
       this.room.connect(url, token),
       // FIXME: make it so the preconenct buffer thing can be disabled?
@@ -223,7 +222,6 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
   }
 
   get messages() {
-    // return this.messageReceiver.messages();
     return this.defaultAggregator?.toArray() ?? [];
   }
 
