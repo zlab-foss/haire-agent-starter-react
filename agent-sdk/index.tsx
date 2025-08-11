@@ -5,6 +5,7 @@ import {
   Participant,
   ParticipantEvent,
   Track,
+  TrackPublication,
   // TextStreamInfo,
 } from "livekit-client";
 import { TrackReference, trackSourceToProtocol } from "@/agent-sdk/external-deps/components-js";
@@ -160,8 +161,8 @@ export function useAgentLocalParticipant() {
   const agentSession = useAgentSession();
 
   const [localParticipant, setLocalParticipant] = React.useState(agentSession.localParticipant);
-  const [microphoneTrack, setMicrophoneTrack] = React.useState<TrackReference | null>(null);
-  const [cameraTrack, setCameraTrack] = React.useState<TrackReference | null>(null);
+  const [microphoneTrackPublication, setMicrophoneTrackPublication] = React.useState<TrackPublication | null>(null);
+  const [cameraTrackPublication, setCameraTrackPublication] = React.useState<TrackPublication | null>(null);
   const [permissions, setPermissions] = React.useState<ParticipantPermission | null>(null);
 
   useParticipantEvents(agentSession.localParticipant, [
@@ -183,17 +184,9 @@ export function useAgentLocalParticipant() {
     // FIXME: is the rest of this stuff needed?
     // const { isMicrophoneEnabled, isCameraEnabled, isScreenShareEnabled } = p;
     const microphoneTrack = agentSession.localParticipant.getTrackPublication(Track.Source.Microphone);
-    setMicrophoneTrack(microphoneTrack ? {
-      source: Track.Source.Microphone,
-      participant: localParticipant,
-      publication: microphoneTrack,
-    } : null);
+    setMicrophoneTrackPublication(microphoneTrack ?? null);
     const cameraTrack = agentSession.localParticipant.getTrackPublication(Track.Source.Camera);
-    setCameraTrack(cameraTrack ? {
-      source: Track.Source.Camera,
-      participant: localParticipant,
-      publication: cameraTrack,
-    } : null);
+    setCameraTrackPublication(cameraTrack ?? null);
     // const participantMedia: ParticipantMedia<T> = {
     //   isCameraEnabled,
     //   isMicrophoneEnabled,
@@ -221,6 +214,28 @@ export function useAgentLocalParticipant() {
       data: permissions?.canPublishData ?? false,
     };
   }, [permissions]);
+
+  const microphoneTrack: TrackReference | null = React.useMemo(() => {
+    if (!microphoneTrackPublication) {
+      return null;
+    }
+    return {
+      participant: localParticipant,
+      source: Track.Source.Microphone,
+      publication: microphoneTrackPublication,
+    };
+  }, [localParticipant, microphoneTrackPublication]);
+
+  const cameraTrack: TrackReference | null = React.useMemo(() => {
+    if (!cameraTrackPublication) {
+      return null;
+    }
+    return {
+      participant: localParticipant,
+      source: Track.Source.Camera,
+      publication: cameraTrackPublication,
+    };
+  }, [localParticipant, cameraTrackPublication]);
 
   return {
     localParticipant,

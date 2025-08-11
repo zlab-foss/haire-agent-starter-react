@@ -41,12 +41,8 @@ export function useAgentControlBar(props: UseAgentControlBarProps = {}): UseAgen
     leave: true,
     ...controls,
   };
-  // const { microphoneTrack, localParticipant } = useLocalParticipant(); // FIXME: replace with agent alternative
-  const {
-    microphoneTrack,
-    localParticipant,
-    publishPermissions,
-  } = useAgentLocalParticipant();
+  // const { microphoneTrack, /* localParticipant */ } = useLocalParticipant(); // FIXME: replace with agent alternative
+  const { microphoneTrack, publishPermissions } = useAgentLocalParticipant();
   // const publishPermissions = usePublishPermissions(); // FIXME: replace with agent alternative
   const room = useRoomContext();
 
@@ -62,14 +58,6 @@ export function useAgentControlBar(props: UseAgentControlBarProps = {}): UseAgen
     source: Track.Source.ScreenShare,
     onDeviceError: (error) => props.onDeviceError?.({ source: Track.Source.ScreenShare, error }),
   });
-
-  const micTrackRef = React.useMemo(() => {
-    return {
-      participant: localParticipant,
-      source: Track.Source.Microphone,
-      publication: microphoneTrack,
-    };
-  }, [localParticipant, microphoneTrack]);
 
   visibleControls.microphone ??= publishPermissions.microphone;
   visibleControls.screenShare ??= publishPermissions.screenShare;
@@ -137,7 +125,7 @@ export function useAgentControlBar(props: UseAgentControlBarProps = {}): UseAgen
   );
 
   return {
-    micTrackRef,
+    micTrackRef: microphoneTrack,
     visibleControls,
     cameraToggle: {
       ...cameraToggle,
