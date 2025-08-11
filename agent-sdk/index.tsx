@@ -36,9 +36,9 @@ export function useAgentSession() {
 export function useAgentMessages() {
   const agentSession = useAgentSession();
 
-  const [messages, setMessages] = useState<
-    Array<ReceivedMessage | SentMessage>
-  >(agentSession.messages);
+  const [messagesState, setMessagesState] = useState<
+    Array<ReceivedMessage | SentMessage> | null
+  >(null);
   useEffect(() => {
     let aggregator: ReceivedMessageAggregator<ReceivedMessage> | null = null;
 
@@ -46,11 +46,12 @@ export function useAgentMessages() {
       if (!aggregator) {
         return;
       }
-      setMessages(aggregator.toArray())
+      setMessagesState(aggregator.toArray());
     };
 
     agentSession.createMessageAggregator({ startsAt: 'beginning' }).then(agg => {
       aggregator = agg;
+      setMessagesState(aggregator.toArray());
       aggregator.on(ReceivedMessageAggregatorEvent.Updated, handleUpdated);
     }).catch(err => {
       // FIXME: how should this error be handled?
@@ -60,6 +61,7 @@ export function useAgentMessages() {
     return () => {
       aggregator?.close();
       aggregator?.off(ReceivedMessageAggregatorEvent.Updated, handleUpdated);
+      setMessagesState(null);
     };
   }, [agentSession]);
 
@@ -67,7 +69,15 @@ export function useAgentMessages() {
     return agentSession.sendMessage(message);
   }, [agentSession]);
 
-  return { messages, send };
+  const { messages, ready } = useMemo(() => {
+    if (messagesState) {
+      return { messages: messagesState, ready: true };
+    } else {
+      return { messages: [], ready: false };
+    }
+  }, [messagesState]);
+
+  return { ready, messages, send };
 }
 
 export function useAgentSessionEvent<EventName extends keyof AgentSessionCallbacks>(
