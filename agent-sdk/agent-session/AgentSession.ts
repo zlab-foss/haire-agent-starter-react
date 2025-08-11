@@ -15,8 +15,7 @@ import {
   type ReceivedMessageAggregatorOptions,
   ReceivedMessageAggregatorEvent,
 } from "./message";
-import AgentParticipant, { AgentParticipantEvent } from './AgentParticipant';
-
+import AgentParticipant, { AgentParticipantEvent, AgentState } from './AgentParticipant';
 
 export enum AgentSessionEvent {
   AgentStateChanged = 'agentStateChanged',
@@ -33,15 +32,6 @@ export type AgentSessionCallbacks = {
   [AgentSessionEvent.AudioPlaybackStatusChanged]: (audioPlaybackPermitted: boolean) => void;
 };
 
-const stateAttribute = 'lk.agent.state';
-
-export type AgentState =
-  | 'disconnected'
-  | 'connecting'
-  | 'initializing'
-  | 'listening'
-  | 'thinking'
-  | 'speaking';
 
 /**
   * AgentSession represents a connection to a LiveKit Agent, providing abstractions to make 1:1
@@ -49,7 +39,6 @@ export type AgentState =
   */
 export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<AgentSessionCallbacks>) {
   room: Room; // FIXME: should this be private?
-  state: AgentState = 'disconnected';
 
   agentParticipant: AgentParticipant | null = null;
   messageSender: MessageSender | null = null;
@@ -63,7 +52,6 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
     this.room = new Room();
     this.room.on(RoomEvent.Connected, this.handleRoomConnected);
     this.room.on(RoomEvent.Disconnected, this.handleRoomDisconnected);
-    this.room.on(RoomEvent.ConnectionStateChanged, this.handleConnectionStateChanged);
     this.room.on(RoomEvent.AudioPlaybackStatusChanged, this.handleAudioPlaybackStatusChanged);
   }
 
@@ -84,8 +72,7 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
   private handleRoomConnected = () => {
     console.log('!! CONNECTED');
     this.agentParticipant = new AgentParticipant(this.room);
-    this.agentParticipant.on(AgentParticipantEvent.AgentAttributesChanged, this.handleAgentAttributesChanged);
-    this.updateAgentState();
+    this.agentParticipant.on(AgentParticipantEvent.AgentStateChanged, this.handleAgentStateChanged);
 
     const chatMessageSender = new ChatMessageSender(this.localParticipant);
     this.messageSender = new CombinedMessageSender(
@@ -114,10 +101,9 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
 
   private handleRoomDisconnected = () => {
     console.log('!! DISCONNECTED');
-    this.agentParticipant?.off(AgentParticipantEvent.AgentAttributesChanged, this.handleAgentAttributesChanged);
+    this.agentParticipant?.off(AgentParticipantEvent.AgentStateChanged, this.handleAgentStateChanged);
     this.agentParticipant?.teardown();
     this.agentParticipant = null;
-    this.updateAgentState();
 
     this.messageReceiver?.close();
     this.messageReceiver = null;
@@ -150,18 +136,13 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
     }, 10_000);
   }
 
-  private handleConnectionStateChanged = async () => {
-    this.updateAgentState();
-  }
+  private handleAgentStateChanged = async (newAgentState: AgentState) => {
+    this.emit(AgentSessionEvent.AgentStateChanged, newAgentState);
+  };
 
   private handleAudioPlaybackStatusChanged = async () => {
     this.emit(AgentSessionEvent.AudioPlaybackStatusChanged, this.room.canPlaybackAudio);
   };
-
-  private handleAgentAttributesChanged = () => {
-    console.log('!! ATTRIB CHANGED:', this.agentParticipant?.attributes)
-    this.updateAgentState();
-  }
 
   private handleIncomingMessage = (incomingMessage: ReceivedMessage) => {
     if (!this.defaultAggregator) {
@@ -179,33 +160,8 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
     this.emit(AgentSessionEvent.MessagesChanged, this.messages);
   }
 
-  private updateAgentState = () => {
-    let newAgentState: AgentState | null = null;
-    if (!this.agentParticipant) {
-      // throw new Error('AgentSession.agentParticipant is unset');
-      newAgentState = 'disconnected';
-    } else {
-      const agentParticipantAttributes = this.agentParticipant.attributes;
-      const connectionState = this.room.state;
-
-      if (connectionState === ConnectionState.Disconnected) {
-        newAgentState = 'disconnected';
-      } else if (
-        connectionState === ConnectionState.Connecting ||
-        !this.agentParticipant ||
-        !agentParticipantAttributes?.[stateAttribute]
-      ) {
-        newAgentState = 'connecting';
-      } else {
-        newAgentState = agentParticipantAttributes[stateAttribute] as AgentState;
-      }
-    }
-    console.log('!! STATE:', newAgentState, this.agentParticipant?.attributes);
-
-    if (this.state !== newAgentState) {
-      this.state = newAgentState;
-      this.emit(AgentSessionEvent.AgentStateChanged, newAgentState);
-    }
+  get state() {
+    return this.agentParticipant?.state ?? 'disconnected';
   }
 
   get isAvailable() {

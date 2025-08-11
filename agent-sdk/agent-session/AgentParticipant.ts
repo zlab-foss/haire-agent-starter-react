@@ -1,13 +1,24 @@
 import type TypedEventEmitter from 'typed-emitter';
 import { EventEmitter } from "events";
-import { ParticipantEvent, ParticipantKind, RemoteParticipant, Room, RoomEvent, Track, TranscriptionSegment } from 'livekit-client';
+import { ConnectionState, ParticipantEvent, ParticipantKind, RemoteParticipant, Room, RoomEvent, Track, TranscriptionSegment } from 'livekit-client';
 import { getParticipantTrackRefs, participantTrackEvents, TrackReference } from '@/agent-sdk/external-deps/components-js';
 import { ParticipantEventCallbacks } from '@/agent-sdk/external-deps/client-sdk-js';
+
+const stateAttribute = 'lk.agent.state';
+
+export type AgentState =
+  | 'disconnected'
+  | 'connecting'
+  | 'initializing'
+  | 'listening'
+  | 'thinking'
+  | 'speaking';
 
 export enum AgentParticipantEvent {
   VideoTrackChanged = 'videoTrackChanged',
   AudioTrackChanged = 'videoTrackChanged',
   AgentAttributesChanged = 'agentAttributesChanged',
+  AgentStateChanged = 'agentStateChanged',
   // AgentTranscriptionsChanged = 'agentTranscriptionsChanged',
 }
 
@@ -15,6 +26,7 @@ export type AgentParticipantCallbacks = {
   [AgentParticipantEvent.VideoTrackChanged]: (newTrack: TrackReference | null) => void;
   [AgentParticipantEvent.AudioTrackChanged]: (newTrack: TrackReference | null) => void;
   [AgentParticipantEvent.AgentAttributesChanged]: (newAttributes: Record<string, string>) => void;
+  [AgentParticipantEvent.AgentStateChanged]: (newState: AgentState) => void;
 };
 
 // Goal: some sort of abstraction layer to provide information specific to the agent's interactions
@@ -23,6 +35,7 @@ export type AgentParticipantCallbacks = {
 // FIXME: maybe this could be named better? ...
 export default class AgentParticipant extends (EventEmitter as new () => TypedEventEmitter<AgentParticipantCallbacks>) {
   private room: Room;
+  state: AgentState = 'disconnected';
 
   private agentParticipant: RemoteParticipant | null = null;
   private workerParticipant: RemoteParticipant | null = null;
@@ -42,11 +55,14 @@ export default class AgentParticipant extends (EventEmitter as new () => TypedEv
 
     this.room.on(RoomEvent.ParticipantConnected, this.handleParticipantConnected);
     this.room.on(RoomEvent.ParticipantDisconnected, this.handleParticipantDisconnected);
+    this.room.on(RoomEvent.ConnectionStateChanged, this.handleConnectionStateChanged);
+    this.updateAgentState();
   }
 
   teardown() {
     this.room.off(RoomEvent.ParticipantConnected, this.handleParticipantConnected);
     this.room.off(RoomEvent.ParticipantDisconnected, this.handleParticipantDisconnected);
+    this.room.off(RoomEvent.ConnectionStateChanged, this.handleConnectionStateChanged);
   }
 
   private handleParticipantConnected = () => {
@@ -54,6 +70,10 @@ export default class AgentParticipant extends (EventEmitter as new () => TypedEv
   }
   private handleParticipantDisconnected = () => {
     this.updateParticipants();
+  }
+
+  private handleConnectionStateChanged = () => {
+    this.updateAgentState();
   }
 
   private updateParticipants() {
@@ -134,7 +154,31 @@ export default class AgentParticipant extends (EventEmitter as new () => TypedEv
   private handleAttributesChanged = (attributes: Record<string, string>) => {
     this.attributes = attributes;
     this.emit(AgentParticipantEvent.AgentAttributesChanged, attributes);
+    this.updateAgentState();
   };
+
+  private updateAgentState() {
+    let newAgentState: AgentState | null = null;
+    const connectionState = this.room.state;
+
+    if (connectionState === ConnectionState.Disconnected) {
+      newAgentState = 'disconnected';
+    } else if (
+      connectionState === ConnectionState.Connecting ||
+      !this.agentParticipant ||
+      !this.attributes[stateAttribute]
+    ) {
+      newAgentState = 'connecting';
+    } else {
+      newAgentState = this.attributes[stateAttribute] as AgentState;
+    }
+    console.log('!! STATE:', newAgentState, this.agentParticipant?.attributes);
+
+    if (this.state !== newAgentState) {
+      this.state = newAgentState;
+      this.emit(AgentParticipantEvent.AgentStateChanged, newAgentState);
+    }
+  }
 
   // private handleTranscriptionReceived = (segments: Array<TranscriptionSegment>) => {
   //   console.log('!! TRANSCRIPTION', segments, this.audioTrackSyncTime);
