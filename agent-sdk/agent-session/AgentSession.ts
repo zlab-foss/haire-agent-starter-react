@@ -130,7 +130,7 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
             : 'Agent connected but did not complete initializing. ';
 
         this.emit(AgentSessionEvent.AgentConnectionFailure, reason);
-        this.room.disconnect();
+        this.disconnect();
       }
     }, 10_000);
   }
