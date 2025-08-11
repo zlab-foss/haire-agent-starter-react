@@ -20,14 +20,14 @@ import Agent, { AgentEvent, AgentState } from './Agent';
 export enum AgentSessionEvent {
   AgentStateChanged = 'agentStateChanged',
   AgentAttributesChanged = 'agentAttributesChanged',
-  MessagesChanged = 'messagesChanged',
+  MessageReceived = 'messageReceived',
   AgentConnectionFailure = 'agentConnectionFailure',
   AudioPlaybackStatusChanged = 'AudioPlaybackStatusChanged',
 }
 
 export type AgentSessionCallbacks = {
   [AgentSessionEvent.AgentStateChanged]: (newAgentState: AgentState) => void;
-  [AgentSessionEvent.MessagesChanged]: (newMessages: Array<SentMessage | ReceivedMessage>) => void;
+  [AgentSessionEvent.MessageReceived]: (newMessage: ReceivedMessage) => void;
   [AgentSessionEvent.AgentConnectionFailure]: (reason: string) => void;
   [AgentSessionEvent.AudioPlaybackStatusChanged]: (audioPlaybackPermitted: boolean) => void;
 };
@@ -156,7 +156,7 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
       aggregator.upsert(incomingMessage);
     }
 
-    this.emit(AgentSessionEvent.MessagesChanged, this.messages);
+    this.emit(AgentSessionEvent.MessageReceived, incomingMessage);
   }
 
   get state() {
@@ -219,10 +219,6 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
 
   get localParticipant() {
     return this.room?.localParticipant ?? null;
-  }
-
-  get messages() {
-    return this.defaultAggregator?.toArray() ?? [];
   }
 
   /**
