@@ -1,6 +1,6 @@
 import type TypedEventEmitter from 'typed-emitter';
 import { EventEmitter } from "events";
-import { ConnectionState, ParticipantEvent, ParticipantKind, RemoteParticipant, Room, RoomEvent, Track, TranscriptionSegment } from 'livekit-client';
+import { ConnectionState, ParticipantEvent, ParticipantKind, RemoteParticipant, Room, RoomEvent, Track } from 'livekit-client';
 import { getParticipantTrackRefs, participantTrackEvents, TrackReference } from '@/agent-sdk/external-deps/components-js';
 import { ParticipantEventCallbacks } from '@/agent-sdk/external-deps/client-sdk-js';
 
@@ -19,7 +19,6 @@ export enum AgentParticipantEvent {
   AudioTrackChanged = 'videoTrackChanged',
   AgentAttributesChanged = 'agentAttributesChanged',
   AgentStateChanged = 'agentStateChanged',
-  // AgentTranscriptionsChanged = 'agentTranscriptionsChanged',
 }
 
 export type AgentParticipantCallbacks = {
@@ -29,10 +28,7 @@ export type AgentParticipantCallbacks = {
   [AgentParticipantEvent.AgentStateChanged]: (newState: AgentState) => void;
 };
 
-// Goal: some sort of abstraction layer to provide information specific to the agent's interactions
-// like video stream / audio stream / transcriptions / underlying participant attributes / etc,
-// since it doesn't just come from one RemoteParticipant
-// FIXME: maybe this could be named better? ...
+/** Encapsulates all agent state / complexity */
 export default class AgentParticipant extends (EventEmitter as new () => TypedEventEmitter<AgentParticipantCallbacks>) {
   private room: Room;
   state: AgentState = 'disconnected';
@@ -42,12 +38,7 @@ export default class AgentParticipant extends (EventEmitter as new () => TypedEv
   audioTrack: TrackReference | null = null;
   videoTrack: TrackReference | null = null;
 
-  audioTrackSyncTime: { timestamp: number, rtpTimestamp?: number } | null = null;
-
   attributes: Record<string, string> = {};
-
-  transcriptions: Array<TranscriptionSegment> = [];
-  transcriptionBufferSize: number = 100//TRACK_TRANSCRIPTION_DEFAULTS.bufferSize;
 
   constructor(room: Room) {
     super();
@@ -136,17 +127,7 @@ export default class AgentParticipant extends (EventEmitter as new () => TypedEv
       this.workerTracks.find((t) => t.source === Track.Source.Microphone) ?? null
     );
     if (this.audioTrack !== newAudioTrack) {
-      // console.log('!! audio track changed', this.audioTrack?.publication);
-      // this.audioTrack?.publication.off(TrackEvent.TranscriptionReceived, this.handleTranscriptionReceived);
       this.audioTrack = newAudioTrack;
-      // this.audioTrack?.publication.on(TrackEvent.TranscriptionReceived, this.handleTranscriptionReceived);
-
-      // this.audioTrackSyncTime = {
-      //   timestamp: Date.now(),
-      //   rtpTimestamp: this.audioTrack?.publication.track?.rtpTimestamp,
-      // };
-      // this.audioTrack?.publication.track?.on(TrackEvent.TimeSyncUpdate, this.handleTimeSyncUpdate);
-
       this.emit(AgentParticipantEvent.AudioTrackChanged, newAudioTrack);
     }
   };
@@ -179,27 +160,6 @@ export default class AgentParticipant extends (EventEmitter as new () => TypedEv
       this.emit(AgentParticipantEvent.AgentStateChanged, newAgentState);
     }
   }
-
-  // private handleTranscriptionReceived = (segments: Array<TranscriptionSegment>) => {
-  //   console.log('!! TRANSCRIPTION', segments, this.audioTrackSyncTime);
-  //   if (!this.audioTrackSyncTime) {
-  //     throw new Error('AgentParticipant - audioTrackSyncTime missing');
-  //   }
-  //   const audioTrackSyncTime = this.audioTrackSyncTime;
-
-  //   this.transcriptions = dedupeSegments(
-  //     this.transcriptions,
-  //     // when first receiving a segment, add the current media timestamp to it
-  //     segments.map((s) => addMediaTimestampToTranscription(s, audioTrackSyncTime)),
-  //     this.transcriptionBufferSize,
-  //   );
-  //   this.emit(AgentParticipantEvent.AgentTranscriptionsChanged, this.transcriptions);
-  // }
-
-  // private handleTimeSyncUpdate = (update: { timestamp: number; rtpTimestamp: number }) => {
-  //   console.log('!! TIME SYNC UPDATE', update);
-  //   this.audioTrackSyncTime = update;
-  // };
 
   private get roomRemoteParticipants() {
     return Array.from(this.room.remoteParticipants.values());
