@@ -68,10 +68,10 @@ export default class ReceivedMessageAggregator<Message extends ReceivedMessage> 
     }
 
     // FIXME: think through this scenario:
-    // 1. Message a is upserted
-    // 2. `options.bufferSize` messages are upserted, evicting message a
-    // 3. Another message a upsert happens, should this somehow get rejected (via bloom filter / etc?)
-    // or just end up in the list again as a seemingly brand new message?
+    // 1. Message `a` is upserted
+    // 2. `options.bufferSize` messages are upserted, evicting message `a`
+    // 3. Another message `a` upsert happens, should this somehow get rejected (via bloom filter / etc?)
+    //    or just end up in the list again as a seemingly brand new message?
     for (const message of messages) {
       this.messageById.set(message.id, message);
       if (!this.messageIds.includes(message.id)) {

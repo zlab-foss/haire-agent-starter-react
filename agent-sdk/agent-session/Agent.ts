@@ -28,13 +28,15 @@ export type AgentCallbacks = {
   [AgentEvent.AgentStateChanged]: (newState: AgentState) => void;
 };
 
-/** Encapsulates all agent state / complexity */
+/**
+  * Agent encapculates all agent state, normalizing some quirks around how LiveKit Agents work.
+  */
 export default class Agent extends (EventEmitter as new () => TypedEventEmitter<AgentCallbacks>) {
   private room: Room;
   state: AgentState = 'disconnected';
 
   private agentParticipant: RemoteParticipant | null = null;
-  private workerParticipant: RemoteParticipant | null = null;
+  private workerParticipant: RemoteParticipant | null = null; // ref: https://docs.livekit.io/agents/integrations/avatar/#avatar-workers
   audioTrack: TrackReference | null = null;
   videoTrack: TrackReference | null = null;
 
