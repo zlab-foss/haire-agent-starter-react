@@ -1,27 +1,27 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import {
-  type AgentState,
-  type ReceivedChatMessage,
-  useRoomContext,
-  useVoiceAssistant,
-} from '@livekit/components-react';
+// import {
+//   type AgentState,
+//   type ReceivedChatMessage,
+//   useRoomContext,
+//   useVoiceAssistant,
+// } from '@livekit/components-react';
 import { toastAlert } from '@/components/alert-toast';
 import { AgentControlBar } from '@/components/livekit/agent-control-bar/agent-control-bar';
 import { ChatEntry } from '@/components/livekit/chat/chat-entry';
 import { ChatMessageView } from '@/components/livekit/chat/chat-message-view';
 import { MediaTiles } from '@/components/livekit/media-tiles';
-import useChatAndTranscription from '@/hooks/useChatAndTranscription';
+// import useChatAndTranscription from '@/hooks/useChatAndTranscription';
 import { useDebugMode } from '@/hooks/useDebug';
 import type { AppConfig } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { AgentSessionEvent, useAgentMessages, useAgentSession, useAgentSessionEvent, useAgentState } from '@/agent-sdk';
+import { AgentSessionEvent, useAgentMessages, useAgentSessionEvent } from '@/agent-sdk';
 
-function isAgentAvailable(agentState: AgentState) {
-  return agentState == 'listening' || agentState == 'thinking' || agentState == 'speaking';
-}
+// function isAgentAvailable(agentState: AgentState) {
+//   return agentState == 'listening' || agentState == 'thinking' || agentState == 'speaking';
+// }
 
 interface SessionViewProps {
   appConfig: AppConfig;
@@ -35,7 +35,6 @@ export const SessionView = ({
   sessionStarted,
   ref,
 }: React.ComponentProps<'div'> & SessionViewProps) => {
-  const agentSession = useAgentSession();
   const { messages, send } = useAgentMessages();
 
   // const { state: agentState } = useVoiceAssistant();
