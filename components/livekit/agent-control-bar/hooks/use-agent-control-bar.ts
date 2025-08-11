@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useCallback } from 'react';
 import { Track } from 'livekit-client';
 import {
   type TrackReferenceOrPlaceholder,
@@ -8,7 +9,7 @@ import {
   useTrackToggle,
 } from '@livekit/components-react';
 import { usePublishPermissions } from './use-publish-permissions';
-import { useAgentLocalParticipant } from '@/agent-sdk';
+import { useAgentLocalParticipant, useAgentSession } from '@/agent-sdk';
 
 export interface ControlBarControls {
   microphone?: boolean;
@@ -42,105 +43,118 @@ export function useAgentControlBar(props: UseAgentControlBarProps = {}): UseAgen
     ...controls,
   };
   // const { microphoneTrack, /* localParticipant */ } = useLocalParticipant(); // FIXME: replace with agent alternative
-  const { microphoneTrack, publishPermissions } = useAgentLocalParticipant();
+  const {
+    publishPermissions,
+    microphone,
+    camera,
+    screenShare,
+  } = useAgentLocalParticipant({
+    onDeviceError: useCallback((error: Error, source: Track.Source) => props.onDeviceError?.({ source, error }), [props.onDeviceError]),
+    saveUserTrackEnabledChoices: saveUserChoices,
+  });
   // const publishPermissions = usePublishPermissions(); // FIXME: replace with agent alternative
-  const room = useRoomContext();
+  // const room = useRoomContext();
+  const agentSession = useAgentSession();
 
-  const microphoneToggle = useTrackToggle({ // FIXME: replace with agent alternative
-    source: Track.Source.Microphone,
-    onDeviceError: (error) => props.onDeviceError?.({ source: Track.Source.Microphone, error }),
-  });
-  const cameraToggle = useTrackToggle({ // FIXME: replace with agent alternative
-    source: Track.Source.Camera,
-    onDeviceError: (error) => props.onDeviceError?.({ source: Track.Source.Camera, error }),
-  });
-  const screenShareToggle = useTrackToggle({ // FIXME: replace with agent alternative
-    source: Track.Source.ScreenShare,
-    onDeviceError: (error) => props.onDeviceError?.({ source: Track.Source.ScreenShare, error }),
-  });
+  // const microphoneToggle = useTrackToggle({ // FIXME: replace with agent alternative
+  //   source: Track.Source.Microphone,
+  //   onDeviceError: (error) => props.onDeviceError?.({ source: Track.Source.Microphone, error }),
+  // });
+  // const cameraToggle = useTrackToggle({ // FIXME: replace with agent alternative
+  //   source: Track.Source.Camera,
+  //   onDeviceError: (error) => props.onDeviceError?.({ source: Track.Source.Camera, error }),
+  // });
+  // const screenShareToggle = useTrackToggle({ // FIXME: replace with agent alternative
+  //   source: Track.Source.ScreenShare,
+  //   onDeviceError: (error) => props.onDeviceError?.({ source: Track.Source.ScreenShare, error }),
+  // });
 
   visibleControls.microphone ??= publishPermissions.microphone;
   visibleControls.screenShare ??= publishPermissions.screenShare;
   visibleControls.camera ??= publishPermissions.camera;
   visibleControls.chat ??= publishPermissions.data;
 
-  const {
-    saveAudioInputEnabled,
-    saveAudioInputDeviceId,
-    saveVideoInputEnabled,
-    saveVideoInputDeviceId,
-  } = usePersistentUserChoices({ // FIXME: replace with agent alternative
-    preventSave: !saveUserChoices,
-  });
+  // const {
+  //   saveAudioInputEnabled,
+  //   saveAudioInputDeviceId,
+  //   saveVideoInputEnabled,
+  //   saveVideoInputDeviceId,
+  // } = usePersistentUserChoices({ // FIXME: replace with agent alternative
+  //   preventSave: !saveUserChoices,
+  // });
 
   const handleDisconnect = React.useCallback(async () => {
-    if (room) {
-      await room.disconnect();
-    }
-  }, [room]);
+    // if (room) {
+    //   await room.disconnect();
+    // }
+    await agentSession?.disconnect()
+  }, [/* room */, agentSession]);
 
-  const handleAudioDeviceChange = React.useCallback(
-    (deviceId: string) => {
-      saveAudioInputDeviceId(deviceId ?? 'default');
-    },
-    [saveAudioInputDeviceId]
-  );
+  // const handleAudioDeviceChange = React.useCallback(
+  //   (deviceId: string) => {
+  //     saveAudioInputDeviceId(deviceId ?? 'default');
+  //   },
+  //   [saveAudioInputDeviceId]
+  // );
 
-  const handleVideoDeviceChange = React.useCallback(
-    (deviceId: string) => {
-      saveVideoInputDeviceId(deviceId ?? 'default');
-    },
-    [saveVideoInputDeviceId]
-  );
+  // const handleVideoDeviceChange = React.useCallback(
+  //   (deviceId: string) => {
+  //     saveVideoInputDeviceId(deviceId ?? 'default');
+  //   },
+  //   [saveVideoInputDeviceId]
+  // );
 
-  const handleToggleCamera = React.useCallback(
-    async (enabled?: boolean) => {
-      if (screenShareToggle.enabled) {
-        screenShareToggle.toggle(false);
-      }
-      await cameraToggle.toggle(enabled);
-      // persist video input enabled preference
-      saveVideoInputEnabled(!cameraToggle.enabled);
-    },
-    [cameraToggle.enabled, screenShareToggle.enabled]
-  );
+  // const handleToggleCamera = React.useCallback(
+  //   async (enabled?: boolean) => {
+  //     if (screenShareToggle.enabled) {
+  //       screenShareToggle.toggle(false);
+  //     }
+  //     await cameraToggle.toggle(enabled);
+  //     // persist video input enabled preference
+  //     saveVideoInputEnabled(!cameraToggle.enabled);
+  //   },
+  //   [cameraToggle.enabled, screenShareToggle.enabled]
+  // );
 
-  const handleToggleMicrophone = React.useCallback(
-    async (enabled?: boolean) => {
-      await microphoneToggle.toggle(enabled);
-      // persist audio input enabled preference
-      saveAudioInputEnabled(!microphoneToggle.enabled);
-    },
-    [microphoneToggle.enabled]
-  );
+  // const handleToggleMicrophone = React.useCallback(
+  //   async (enabled?: boolean) => {
+  //     await microphoneToggle.toggle(enabled);
+  //     // persist audio input enabled preference
+  //     saveAudioInputEnabled(!microphoneToggle.enabled);
+  //   },
+  //   [microphoneToggle.enabled]
+  // );
 
-  const handleToggleScreenShare = React.useCallback(
-    async (enabled?: boolean) => {
-      if (cameraToggle.enabled) {
-        cameraToggle.toggle(false);
-      }
-      await screenShareToggle.toggle(enabled);
-    },
-    [screenShareToggle.enabled, cameraToggle.enabled]
-  );
+  // const handleToggleScreenShare = React.useCallback(
+  //   async (enabled?: boolean) => {
+  //     if (cameraToggle.enabled) {
+  //       cameraToggle.toggle(false);
+  //     }
+  //     await screenShareToggle.toggle(enabled);
+  //   },
+  //   [screenShareToggle.enabled, cameraToggle.enabled]
+  // );
 
   return {
-    micTrackRef: microphoneTrack,
+    micTrackRef: microphone.track,
     visibleControls,
-    cameraToggle: {
-      ...cameraToggle,
-      toggle: handleToggleCamera,
-    },
-    microphoneToggle: {
-      ...microphoneToggle,
-      toggle: handleToggleMicrophone,
-    },
-    screenShareToggle: {
-      ...screenShareToggle,
-      toggle: handleToggleScreenShare,
-    },
+    cameraToggle: { ...camera, buttonProps: {} },
+    microphoneToggle: { ...microphone, buttonProps: {} },
+    screenShareToggle: { ...screenShare, buttonProps: {} },
+    // cameraToggle: {
+    //   ...cameraToggle,
+    //   toggle: handleToggleCamera,
+    // },
+    // microphoneToggle: {
+    //   ...microphoneToggle,
+    //   toggle: handleToggleMicrophone,
+    // },
+    // screenShareToggle: {
+    //   ...screenShareToggle,
+    //   toggle: handleToggleScreenShare,
+    // },
     handleDisconnect,
-    handleAudioDeviceChange,
-    handleVideoDeviceChange,
+    handleAudioDeviceChange: microphone.changeDevice,
+    handleVideoDeviceChange: camera.changeDevice,
   };
 }

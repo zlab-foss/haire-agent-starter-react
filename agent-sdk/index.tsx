@@ -1,11 +1,14 @@
 import * as React from "react";
 import { useContext, useEffect, useState, useCallback, useMemo } from "react";
 import {
+  AudioCaptureOptions,
   Participant,
   ParticipantEvent,
+  ScreenShareCaptureOptions,
   Track,
   TrackPublication,
-  // TextStreamInfo,
+  TrackPublishOptions,
+  VideoCaptureOptions,
 } from "livekit-client";
 import { TrackReference, trackSourceToProtocol } from "@/agent-sdk/external-deps/components-js";
 import { ParticipantEventCallbacks } from "../node_modules/livekit-client/src/room/participant/Participant";
@@ -13,6 +16,7 @@ import { AgentSession, AgentSessionCallbacks, AgentSessionEvent } from "./agent-
 import { ReceivedMessage, ReceivedMessageAggregator, ReceivedMessageAggregatorEvent, SentMessage } from "./agent-session/message";
 import { AgentCallbacks, AgentEvent } from "./agent-session/Agent";
 import { ParticipantPermission } from "livekit-server-sdk";
+import { usePersistentUserChoices } from "@livekit/components-react";
 
 // ---------------------
 // REACT
@@ -166,12 +170,25 @@ function useParticipantEvents<P extends Participant, EventName extends keyof Par
   }, [participant, eventNames, memoizedCallback]);
 }
 
-export function useAgentLocalParticipant() {
+export function useAgentLocalParticipant(options?: {
+  onDeviceError?: (error: Error, source: Track.Source) => void;
+  saveUserTrackEnabledChoices?: boolean;
+}) {
   const agentSession = useAgentSession();
 
   const [localParticipant, setLocalParticipant] = React.useState(agentSession.localParticipant);
   const [microphoneTrackPublication, setMicrophoneTrackPublication] = React.useState<TrackPublication | null>(null);
+  const [microphoneTrackEnabled, setMicrophoneTrackEnabled] = React.useState(false);
+  const [microphoneTrackPending, setMicrophoneTrackPending] = React.useState(false);
+
   const [cameraTrackPublication, setCameraTrackPublication] = React.useState<TrackPublication | null>(null);
+  const [cameraTrackEnabled, setCameraTrackEnabled] = React.useState(false);
+  const [cameraTrackPending, setCameraTrackPending] = React.useState(false);
+
+  const [screenShareTrackPublication, setScreenShareTrackPublication] = React.useState<TrackPublication | null>(null);
+  const [screenShareTrackEnabled, setScreenShareTrackEnabled] = React.useState(false);
+  const [screenShareTrackPending, setScreenShareTrackPending] = React.useState(false);
+
   const [permissions, setPermissions] = React.useState<ParticipantPermission | null>(null);
 
   useParticipantEvents(agentSession.localParticipant, [
@@ -194,17 +211,15 @@ export function useAgentLocalParticipant() {
     // const { isMicrophoneEnabled, isCameraEnabled, isScreenShareEnabled } = p;
     const microphoneTrack = agentSession.localParticipant.getTrackPublication(Track.Source.Microphone);
     setMicrophoneTrackPublication(microphoneTrack ?? null);
+    setMicrophoneTrackEnabled(localParticipant.isMicrophoneEnabled);
+
     const cameraTrack = agentSession.localParticipant.getTrackPublication(Track.Source.Camera);
     setCameraTrackPublication(cameraTrack ?? null);
-    // const participantMedia: ParticipantMedia<T> = {
-    //   isCameraEnabled,
-    //   isMicrophoneEnabled,
-    //   isScreenShareEnabled,
-    //   cameraTrack,
-    //   microphoneTrack,
-    //   participant: p,
-    // };
-    // return participantMedia;
+    setCameraTrackEnabled(localParticipant.isCameraEnabled);
+
+    const screenShareTrack = agentSession.localParticipant.getTrackPublication(Track.Source.ScreenShare);
+    setScreenShareTrackPublication(screenShareTrack ?? null);
+    setScreenShareTrackEnabled(localParticipant.isScreenShareEnabled);
   }, []);
 
   const publishPermissions = useMemo(() => {
@@ -246,11 +261,156 @@ export function useAgentLocalParticipant() {
     };
   }, [localParticipant, cameraTrackPublication]);
 
+  const screenShareTrack: TrackReference | null = React.useMemo(() => {
+    if (!screenShareTrackPublication) {
+      return null;
+    }
+    return {
+      participant: localParticipant,
+      source: Track.Source.ScreenShare,
+      publication: screenShareTrackPublication,
+    };
+  }, [localParticipant, screenShareTrackPublication]);
+
+  const {
+    saveAudioInputEnabled,
+    saveAudioInputDeviceId,
+    saveVideoInputEnabled,
+    saveVideoInputDeviceId,
+  } = usePersistentUserChoices({ // FIXME: replace with agent alternative
+    preventSave: !options?.saveUserTrackEnabledChoices,
+  });
+
+  const setMicrophoneEnabled = useCallback(async (
+    enabled: boolean,
+    captureOptions?: AudioCaptureOptions,
+    publishOptions?: TrackPublishOptions,
+  ) => {
+    setMicrophoneTrackPending(true);
+    try {
+      await localParticipant.setMicrophoneEnabled(
+        enabled,
+        captureOptions,
+        publishOptions,
+      );
+      saveAudioInputEnabled(enabled);
+      setMicrophoneTrackEnabled(enabled);
+      return localParticipant.isMicrophoneEnabled;
+    } catch (e) {
+      if (options?.onDeviceError && e instanceof Error) {
+        options?.onDeviceError(e, Track.Source.Microphone);
+        return;
+      } else {
+        throw e;
+      }
+    } finally {
+      setMicrophoneTrackPending(false);
+    }
+  }, [options?.onDeviceError, setMicrophoneTrackPending, saveAudioInputEnabled, setMicrophoneTrackEnabled]);
+
+  const setCameraEnabled = useCallback(async (
+    enabled: boolean,
+    captureOptions?: VideoCaptureOptions,
+    publishOptions?: TrackPublishOptions,
+  ) => {
+    setCameraTrackPending(true);
+    try {
+      await localParticipant.setCameraEnabled(
+        enabled,
+        captureOptions,
+        publishOptions,
+      );
+      saveVideoInputEnabled(enabled);
+      setCameraTrackEnabled(enabled);
+      return localParticipant.isMicrophoneEnabled;
+    } catch (e) {
+      if (options?.onDeviceError && e instanceof Error) {
+        options?.onDeviceError(e, Track.Source.Camera);
+        return;
+      } else {
+        throw e;
+      }
+    } finally {
+      setCameraTrackPending(false);
+    }
+  }, [options?.onDeviceError, setCameraTrackPending, saveVideoInputEnabled, setCameraTrackEnabled]);
+
+  const setScreenShareEnabled = useCallback(async (
+    enabled: boolean,
+    captureOptions?: ScreenShareCaptureOptions,
+    publishOptions?: TrackPublishOptions,
+  ) => {
+    setScreenShareTrackPending(true);
+    try {
+      await localParticipant.setScreenShareEnabled(
+        enabled,
+        captureOptions,
+        publishOptions,
+      );
+      setScreenShareEnabled(enabled);
+      return localParticipant.isMicrophoneEnabled;
+    } catch (e) {
+      if (options?.onDeviceError && e instanceof Error) {
+        options?.onDeviceError(e, Track.Source.ScreenShare);
+        return;
+      } else {
+        throw e;
+      }
+    } finally {
+      setScreenShareTrackPending(false);
+    }
+  }, [options?.onDeviceError, setScreenShareTrackPending, setScreenShareTrackEnabled]);
+
+  const changeAudioDevice = useCallback(
+    (deviceId: string) => {
+      saveAudioInputDeviceId(deviceId ?? 'default');
+    },
+    [saveAudioInputDeviceId]
+  );
+
+  const changeVideoDevice = useCallback(
+    (deviceId: string) => {
+      saveVideoInputDeviceId(deviceId ?? 'default');
+    },
+    [saveVideoInputDeviceId]
+  );
+
   return {
     localParticipant,
-    microphoneTrack,
-    cameraTrack,
     publishPermissions,
+
+    microphone: {
+      track: microphoneTrack,
+      enabled: microphoneTrackEnabled,
+      pending: microphoneTrackPending,
+      set: setMicrophoneEnabled,
+      toggle: useCallback((
+        captureOptions?: AudioCaptureOptions,
+        publishOptions?: TrackPublishOptions
+      ) => setMicrophoneEnabled(!microphoneTrackEnabled, captureOptions, publishOptions), [microphoneTrackEnabled, setMicrophoneEnabled]),
+      changeDevice: changeAudioDevice,
+    },
+    camera: {
+      track: cameraTrack,
+      enabled: cameraTrackEnabled,
+      pending: cameraTrackPending,
+      set: setCameraEnabled,
+      toggle: useCallback((
+        captureOptions?: VideoCaptureOptions,
+        publishOptions?: TrackPublishOptions
+      ) => setCameraEnabled(!cameraTrackEnabled, captureOptions, publishOptions), [cameraTrackEnabled, setCameraEnabled]),
+      changeDevice: changeVideoDevice,
+    },
+    screenShare: {
+      track: screenShareTrack,
+      enabled: screenShareTrackEnabled,
+      pending: screenShareTrackPending,
+      set: setScreenShareEnabled,
+      toggle: useCallback((
+        captureOptions?: ScreenShareCaptureOptions,
+        publishOptions?: TrackPublishOptions
+      ) => setScreenShareEnabled(!screenShareTrackEnabled, captureOptions, publishOptions), [screenShareTrackEnabled, setScreenShareEnabled]),
+    },
   };
 }
 
