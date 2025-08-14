@@ -1,12 +1,11 @@
 import * as React from 'react';
-import type { MessageFormatter, ReceivedChatMessage } from '@livekit/components-react';
+import type { MessageFormatter } from '@livekit/components-react';
 import { cn } from '@/lib/utils';
-import { useChatMessage } from './hooks/utils';
-import { ReceivedMessage, SentMessage } from '@/agent-sdk';
+import { ReceivedMessage } from '@/agent-sdk/agent-session/message';
 
 export interface ChatEntryProps extends React.HTMLAttributes<HTMLLIElement> {
   /** The chat massage object to display. */
-  entry: ReceivedMessage | SentMessage;
+  entry: ReceivedMessage;
   /** Hide sender name. Useful when displaying multiple consecutive chat messages from the same person. */
   hideName?: boolean;
   /** Hide message timestamp. */
