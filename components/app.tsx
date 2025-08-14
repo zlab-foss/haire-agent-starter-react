@@ -20,14 +20,14 @@ interface AppProps {
 }
 
 export function App({ appConfig }: AppProps) {
-  const agentSession = useMemo(() => new AgentSession(), []);
+  const { connectionDetailsProvider } = useConnectionDetails();
+  const agentSession = useMemo(() => new AgentSession(connectionDetailsProvider), [connectionDetailsProvider]);
   const [sessionStarted, setSessionStarted] = useState(false);
-  const { connectionDetails, refreshConnectionDetails } = useConnectionDetails();
 
   useEffect(() => {
     const onDisconnected = () => {
       setSessionStarted(false);
-      refreshConnectionDetails();
+      connectionDetailsProvider.refresh();
     };
     const onMediaDevicesError = (error: Error) => {
       toastAlert({
@@ -41,15 +41,12 @@ export function App({ appConfig }: AppProps) {
       agentSession.room.off(RoomEvent.Disconnected, onDisconnected);
       agentSession.room.off(RoomEvent.MediaDevicesError, onMediaDevicesError);
     };
-  }, [agentSession, refreshConnectionDetails]);
+  }, [agentSession, connectionDetailsProvider.refresh]);
 
   useEffect(() => {
     let aborted = false;
-    if (sessionStarted && agentSession.state === 'disconnected' && connectionDetails) {
-      agentSession.connect(
-        connectionDetails.serverUrl,
-        connectionDetails.participantToken,
-      ).catch((error) => {
+    if (sessionStarted && agentSession.state === 'disconnected') {
+      agentSession.connect().catch((error) => {
         if (aborted) {
           // Once the effect has cleaned up after itself, drop any errors
           //
@@ -69,7 +66,7 @@ export function App({ appConfig }: AppProps) {
       aborted = true;
       agentSession.disconnect();
     };
-  }, [agentSession, sessionStarted, connectionDetails /* , appConfig.isPreConnectBufferEnabled */]);
+  }, [agentSession, sessionStarted /* , appConfig.isPreConnectBufferEnabled */]);
 
   const { startButtonText } = appConfig;
 

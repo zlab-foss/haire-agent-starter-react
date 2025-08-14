@@ -16,6 +16,7 @@ import {
   ReceivedMessageAggregatorEvent,
 } from "./message";
 import Agent, { AgentEvent, AgentState } from './Agent';
+import { ConnectionCredentialsProvider } from './ConnectionCredentialsProvider';
 
 export enum AgentSessionEvent {
   AgentStateChanged = 'agentStateChanged',
@@ -46,18 +47,29 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
   defaultAggregator: ReceivedMessageAggregator<ReceivedMessage> | null = null;
   aggregators: Array<ReceivedMessageAggregator<ReceivedMessage>> | null = null;
 
-  constructor() {
+  private connectionCredentialsProvider: ConnectionCredentialsProvider;
+
+  constructor(provider: ConnectionCredentialsProvider) {
     super();
+    this.connectionCredentialsProvider = provider;
 
     this.room = new Room();
     this.room.on(RoomEvent.Connected, this.handleRoomConnected);
     this.room.on(RoomEvent.Disconnected, this.handleRoomDisconnected);
     this.room.on(RoomEvent.AudioPlaybackStatusChanged, this.handleAudioPlaybackStatusChanged);
+
+    this.prepareConnection().catch(err => {
+      // FIXME: figure out a better logging solution?
+      console.warn('WARNING: Room.prepareConnection failed:', err);
+    });
   }
 
-  async connect(url: string, token: string) {
+  async connect() {
+    // await this.waitUntilRoomDisconnected()
     await Promise.all([
-      this.room.connect(url, token),
+      this.connectionCredentialsProvider.generate().then(connection => (
+        this.room.connect(connection.serverUrl, connection.participantToken)
+      )),
       // FIXME: make it so the preconenct buffer thing can be disabled?
       this.room.localParticipant.setMicrophoneEnabled(true, undefined, { preConnectBuffer: true }),
     ]);
@@ -66,6 +78,11 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
   }
   async disconnect() {
     await this.room.disconnect();
+  }
+
+  async prepareConnection() {
+    const credentials = await this.connectionCredentialsProvider.generate();
+    await this.room.prepareConnection(credentials.serverUrl, credentials.participantToken);
   }
 
   private handleRoomConnected = () => {
