@@ -265,11 +265,17 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
 
   // FIXME: maybe there should be a special case where if message is `string` it is converted into
   // a `SentChatMessage`?
-  async sendMessage(message: SentMessage) {
+  async sendMessage(message: SentMessage | string) {
     if (!this.messageSender) {
       throw new Error('AgentSession.sendMessage - cannot send message until room is connected and MessageSender initialized!');
     }
-    await this.messageSender.send(message);
+    const constructedMessage: SentMessage = typeof message === 'string' ? {
+      id: `${Math.random()}`, /* FIXME: fix id generation */
+      direction: 'outbound',
+      timestamp: new Date(),
+      content: { type: 'chat', text: message },
+    } : message;
+    await this.messageSender.send(constructedMessage);
   }
   // onMessage?: (callback: (reader: TextStreamReader) => void) => void | undefined;
 
