@@ -45,7 +45,7 @@ export function App({ appConfig }: AppProps) {
 
   useEffect(() => {
     let aborted = false;
-    if (sessionStarted && agentSession.state === 'disconnected') {
+    if (sessionStarted && agentSession.connectionState === 'disconnected') {
       agentSession.connect().catch((error) => {
         if (aborted) {
           // Once the effect has cleaned up after itself, drop any errors

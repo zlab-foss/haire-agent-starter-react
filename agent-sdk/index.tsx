@@ -127,15 +127,45 @@ export function useAgentEvent<EventName extends keyof AgentCallbacks>(
 
 export function useAgentState() {
   const agentSession = useAgentSession();
-  const [agentState, setAgentState] = useState(agentSession.state);
+  const [connectionState, setConnectionState] = useState(agentSession.connectionState);
+  const [conversationalState, setConversationalState] = useState(agentSession.conversationalState);
   const [isAvailable, setIsAvailable] = useState(agentSession.isAvailable);
+  const [isConnected, setIsConnected] = useState(agentSession.isConnected);
 
-  useAgentSessionEvent(AgentSessionEvent.AgentStateChanged, (newAgentState) => {
-    setAgentState(newAgentState);
+  useAgentSessionEvent(AgentSessionEvent.AgentConnectionStateChanged, (newState) => {
+    setConnectionState(newState);
     setIsAvailable(agentSession.isAvailable);
+    setIsConnected(agentSession.isConnected);
+  }, []);
+  useAgentSessionEvent(AgentSessionEvent.AgentConversationalStateChanged, (newState) => {
+    setConversationalState(newState);
+    setIsAvailable(agentSession.isAvailable);
+    setIsConnected(agentSession.isConnected);
   }, []);
 
-  return { state: agentState, isAvailable };
+  const legacyState = useMemo((): 'disconnected' | 'connecting' | 'initializing' | 'listening' | 'thinking' | 'speaking' => {
+    if (connectionState === 'disconnected' || connectionState === 'connecting') {
+      return connectionState;
+    } else {
+      switch (conversationalState) {
+        case 'initializing':
+        case 'idle':
+          return 'initializing';
+
+        default:
+          return conversationalState;
+      }
+    }
+  }, [connectionState, conversationalState]);
+
+  return {
+    connectionState,
+    conversationalState,
+    /** @deprecated Use connectionState / conversationalState insread of legacyState */
+    legacyState,
+    isAvailable,
+    isConnected
+  };
 }
 
 export function useAgentTracks() {

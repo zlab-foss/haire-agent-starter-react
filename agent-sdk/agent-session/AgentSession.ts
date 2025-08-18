@@ -15,11 +15,12 @@ import {
   type ReceivedMessageAggregatorOptions,
   ReceivedMessageAggregatorEvent,
 } from "./message";
-import Agent, { AgentEvent, AgentState } from './Agent';
+import Agent, { AgentConnectionState, AgentConversationalState, AgentEvent } from './Agent';
 import { ConnectionCredentialsProvider } from './ConnectionCredentialsProvider';
 
 export enum AgentSessionEvent {
-  AgentStateChanged = 'agentStateChanged',
+  AgentConnectionStateChanged = 'agentConnectionStateChanged',
+  AgentConversationalStateChanged = 'agentConversationalStateChanged',
   AgentAttributesChanged = 'agentAttributesChanged',
   MessageReceived = 'messageReceived',
   Disconnected = 'disconnected',
@@ -28,7 +29,8 @@ export enum AgentSessionEvent {
 }
 
 export type AgentSessionCallbacks = {
-  [AgentSessionEvent.AgentStateChanged]: (newAgentState: AgentState) => void;
+  [AgentSessionEvent.AgentConnectionStateChanged]: (newAgentConnectionState: AgentConnectionState) => void;
+  [AgentSessionEvent.AgentConversationalStateChanged]: (newAgentConversationalState: AgentConversationalState) => void;
   [AgentSessionEvent.MessageReceived]: (newMessage: ReceivedMessage) => void;
   [AgentSessionEvent.AgentConnectionFailure]: (reason: string) => void;
   [AgentSessionEvent.AudioPlaybackStatusChanged]: (audioPlaybackPermitted: boolean) => void;
@@ -129,7 +131,8 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
   private handleRoomConnected = () => {
     console.log('!! CONNECTED');
     this.agent = new Agent(this.room);
-    this.agent.on(AgentEvent.AgentStateChanged, this.handleAgentStateChanged);
+    this.agent.on(AgentEvent.AgentConnectionStateChanged, this.handleAgentConnectionStateChanged);
+    this.agent.on(AgentEvent.AgentConversationalStateChanged, this.handleAgentConversationalStateChanged);
 
     const chatMessageSender = new ChatMessageSender(this.localParticipant);
     this.messageSender = new CombinedMessageSender(
@@ -155,7 +158,8 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
 
   private handleRoomDisconnected = () => {
     console.log('!! DISCONNECTED');
-    this.agent?.off(AgentEvent.AgentStateChanged, this.handleAgentStateChanged);
+    this.agent?.off(AgentEvent.AgentConnectionStateChanged, this.handleAgentConnectionStateChanged);
+    this.agent?.off(AgentEvent.AgentConversationalStateChanged, this.handleAgentConversationalStateChanged);
     this.agent?.teardown();
     this.agent = null;
 
@@ -175,7 +179,7 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
     this.agentConnectedTimeout = setTimeout(() => {
       if (!this.isAvailable) {
         const reason =
-          this.state === 'connecting'
+          this.connectionState === 'connecting'
             ? 'Agent did not join the room. '
             : 'Agent connected but did not complete initializing. ';
 
@@ -185,8 +189,12 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
     }, this.agentConnectTimeoutMilliseconds ?? DEFAULT_AGENT_CONNECT_TIMEOUT_MILLISECONDS);
   }
 
-  private handleAgentStateChanged = async (newAgentState: AgentState) => {
-    this.emit(AgentSessionEvent.AgentStateChanged, newAgentState);
+  private handleAgentConnectionStateChanged = async (newConnectionState: AgentConnectionState) => {
+    this.emit(AgentSessionEvent.AgentConnectionStateChanged, newConnectionState);
+  };
+
+  private handleAgentConversationalStateChanged = async (newConversationalState: AgentConversationalState) => {
+    this.emit(AgentSessionEvent.AgentConversationalStateChanged, newConversationalState);
   };
 
   private handleAudioPlaybackStatusChanged = async () => {
@@ -197,12 +205,29 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
     this.emit(AgentSessionEvent.MessageReceived, incomingMessage);
   }
 
-  get state() {
-    return this.agent?.state ?? 'disconnected';
+  get connectionState() {
+    return this.agent?.connectionState ?? 'disconnected';
+  }
+  get conversationalState() {
+    return this.agent?.conversationalState ?? 'disconnected';
   }
 
+  /** Has the session successfully connected to the running agent? */
+  get isConnected() {
+    return (
+      this.connectionState === 'connected' ||
+      this.connectionState === 'reconnecting' ||
+      this.connectionState === 'signalReconnecting'
+    );
+  }
+
+  /** Is the agent ready for user interaction? */
   get isAvailable() {
-    return this.state == 'listening' || this.state == 'thinking' || this.state == 'speaking';
+    return (
+      this.conversationalState === 'listening' ||
+      this.conversationalState === 'thinking' ||
+      this.conversationalState === 'speaking'
+    );
   }
 
   /** Returns a promise that resolves once the agent is available for interaction */
@@ -221,11 +246,13 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
       };
 
       const cleanup = () => {
-        this.off(AgentSessionEvent.AgentStateChanged, stateChangedHandler);
+        this.off(AgentSessionEvent.AgentConnectionStateChanged, stateChangedHandler);
+        this.off(AgentSessionEvent.AgentConversationalStateChanged, stateChangedHandler);
         signal?.removeEventListener('abort', abortHandler);
       };
 
-      this.on(AgentSessionEvent.AgentStateChanged, stateChangedHandler);
+      this.on(AgentSessionEvent.AgentConnectionStateChanged, stateChangedHandler);
+      this.on(AgentSessionEvent.AgentConversationalStateChanged, stateChangedHandler);
       signal?.addEventListener('abort', abortHandler);
     });
   }

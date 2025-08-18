@@ -6,26 +6,26 @@ import { ParticipantEventCallbacks } from '@/agent-sdk/external-deps/client-sdk-
 
 const stateAttribute = 'lk.agent.state';
 
-export type AgentState =
-  | 'disconnected'
-  | 'connecting'
-  | 'initializing'
-  | 'listening'
-  | 'thinking'
-  | 'speaking';
+/** State representing the current connection status to the server hosted agent */
+export type AgentConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'signalReconnecting';
+
+/** State representing the current status of the agent, whether it is ready for speach, etc */
+export type AgentConversationalState = 'disconnected' | 'initializing' | 'idle' | 'listening' | 'thinking' | 'speaking';
 
 export enum AgentEvent {
   VideoTrackChanged = 'videoTrackChanged',
   AudioTrackChanged = 'videoTrackChanged',
   AgentAttributesChanged = 'agentAttributesChanged',
-  AgentStateChanged = 'agentStateChanged',
+  AgentConnectionStateChanged = 'agentConnectionStateChanged',
+  AgentConversationalStateChanged = 'agentConversationalStateChanged',
 }
 
 export type AgentCallbacks = {
   [AgentEvent.VideoTrackChanged]: (newTrack: TrackReference | null) => void;
   [AgentEvent.AudioTrackChanged]: (newTrack: TrackReference | null) => void;
   [AgentEvent.AgentAttributesChanged]: (newAttributes: Record<string, string>) => void;
-  [AgentEvent.AgentStateChanged]: (newState: AgentState) => void;
+  [AgentEvent.AgentConnectionStateChanged]: (newAgentConnectionState: AgentConnectionState) => void;
+  [AgentEvent.AgentConversationalStateChanged]: (newAgentConversationalState: AgentConversationalState) => void;
 };
 
 /**
@@ -33,7 +33,9 @@ export type AgentCallbacks = {
   */
 export default class Agent extends (EventEmitter as new () => TypedEventEmitter<AgentCallbacks>) {
   private room: Room;
-  state: AgentState = 'disconnected';
+
+  connectionState: AgentConnectionState = 'disconnected';
+  conversationalState: AgentConversationalState = 'disconnected';
 
   private agentParticipant: RemoteParticipant | null = null;
   private workerParticipant: RemoteParticipant | null = null; // ref: https://docs.livekit.io/agents/integrations/avatar/#avatar-workers
@@ -49,13 +51,17 @@ export default class Agent extends (EventEmitter as new () => TypedEventEmitter<
     this.room.on(RoomEvent.ParticipantConnected, this.handleParticipantConnected);
     this.room.on(RoomEvent.ParticipantDisconnected, this.handleParticipantDisconnected);
     this.room.on(RoomEvent.ConnectionStateChanged, this.handleConnectionStateChanged);
-    this.updateAgentState();
+    this.room.localParticipant.on(ParticipantEvent.TrackPublished, this.handleLocalParticipantTrackPublished)
+
+    this.updateConnectionState();
+    this.updateConversationalState();
   }
 
   teardown() {
     this.room.off(RoomEvent.ParticipantConnected, this.handleParticipantConnected);
     this.room.off(RoomEvent.ParticipantDisconnected, this.handleParticipantDisconnected);
     this.room.off(RoomEvent.ConnectionStateChanged, this.handleConnectionStateChanged);
+    this.room.localParticipant.off(ParticipantEvent.TrackPublished, this.handleLocalParticipantTrackPublished)
   }
 
   private handleParticipantConnected = () => {
@@ -66,7 +72,12 @@ export default class Agent extends (EventEmitter as new () => TypedEventEmitter<
   }
 
   private handleConnectionStateChanged = () => {
-    this.updateAgentState();
+    this.updateConnectionState();
+    this.updateConversationalState();
+  }
+
+  private handleLocalParticipantTrackPublished = () => {
+    this.updateConversationalState();
   }
 
   private updateParticipants() {
@@ -137,29 +148,58 @@ export default class Agent extends (EventEmitter as new () => TypedEventEmitter<
   private handleAttributesChanged = (attributes: Record<string, string>) => {
     this.attributes = attributes;
     this.emit(AgentEvent.AgentAttributesChanged, attributes);
-    this.updateAgentState();
+    this.updateConnectionState();
+    this.updateConversationalState();
   };
 
-  private updateAgentState() {
-    let newAgentState: AgentState | null = null;
-    const connectionState = this.room.state;
+  private updateConnectionState() {
+    let newConnectionState: AgentConnectionState;
 
-    if (connectionState === ConnectionState.Disconnected) {
-      newAgentState = 'disconnected';
+    const roomConnectionState = this.room.state;
+    if (roomConnectionState === ConnectionState.Disconnected) {
+      newConnectionState = 'disconnected';
     } else if (
-      connectionState === ConnectionState.Connecting ||
+      roomConnectionState === ConnectionState.Connecting ||
       !this.agentParticipant ||
       !this.attributes[stateAttribute]
     ) {
-      newAgentState = 'connecting';
+      newConnectionState = 'connecting';
     } else {
-      newAgentState = this.attributes[stateAttribute] as AgentState;
+      newConnectionState = roomConnectionState;
     }
-    console.log('!! STATE:', newAgentState, this.agentParticipant?.attributes);
+    console.log('!! CONNECTION STATE:', newConnectionState);
 
-    if (this.state !== newAgentState) {
-      this.state = newAgentState;
-      this.emit(AgentEvent.AgentStateChanged, newAgentState);
+    if (this.connectionState !== newConnectionState) {
+      this.connectionState = newConnectionState;
+      this.emit(AgentEvent.AgentConnectionStateChanged, newConnectionState);
+    }
+  }
+
+  private updateConversationalState() {
+    let newConversationalState: AgentConversationalState = 'disconnected';
+
+    if (this.room.state !== ConnectionState.Disconnected) {
+      newConversationalState = 'initializing';
+    }
+
+    // If the microphone preconnect buffer is active, then the state should be "listening" rather
+    // than "initializing"
+    const micTrack = this.room.localParticipant.getTrackPublication(Track.Source.Microphone);
+    if (micTrack) {
+      newConversationalState = 'listening';
+    }
+
+    if (this.agentParticipant && this.attributes[stateAttribute]) {
+      // ref: https://github.com/livekit/agents/blob/65170238db197f62f479eb7aaef1c0e18bfad6e7/livekit-agents/livekit/agents/voice/events.py#L97
+      const agentState = this.attributes[stateAttribute] as 'initializing' | 'idle' | 'listening' | 'thinking' | 'speaking';
+      newConversationalState = agentState;
+    }
+
+    console.log('!! CONVERSATIONAL STATE:', newConversationalState);
+
+    if (this.conversationalState !== newConversationalState) {
+      this.conversationalState = newConversationalState;
+      this.emit(AgentEvent.AgentConversationalStateChanged, newConversationalState);
     }
   }
 
