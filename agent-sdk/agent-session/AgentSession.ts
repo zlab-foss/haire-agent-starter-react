@@ -22,6 +22,7 @@ export enum AgentSessionEvent {
   AgentStateChanged = 'agentStateChanged',
   AgentAttributesChanged = 'agentAttributesChanged',
   MessageReceived = 'messageReceived',
+  Disconnected = 'disconnected',
   AgentConnectionFailure = 'agentConnectionFailure',
   AudioPlaybackStatusChanged = 'AudioPlaybackStatusChanged',
 }
@@ -31,6 +32,7 @@ export type AgentSessionCallbacks = {
   [AgentSessionEvent.MessageReceived]: (newMessage: ReceivedMessage) => void;
   [AgentSessionEvent.AgentConnectionFailure]: (reason: string) => void;
   [AgentSessionEvent.AudioPlaybackStatusChanged]: (audioPlaybackPermitted: boolean) => void;
+  [AgentSessionEvent.Disconnected]: () => void;
 };
 
 
@@ -123,6 +125,8 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
       clearTimeout(this.agentConnectedTimeout);
       this.agentConnectedTimeout = null;
     }
+
+    this.emit(AgentSessionEvent.Disconnected);
   }
 
   private agentConnectedTimeout: NodeJS.Timeout | null = null;
