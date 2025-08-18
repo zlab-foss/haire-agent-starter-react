@@ -36,7 +36,19 @@ export type AgentSessionCallbacks = {
 };
 
 export type AgentSessionOptions = {
-  connectSignal?: AbortSignal;
+  /** Optional abort signal which if triggered will stop waiting for the room to be disconnected
+    * prior to connecting
+    *
+    * FIXME: is this a confusing property to expose? Maybe expose one `signal` that universally
+    * could apply across the whole agentSession.connect(...) call?
+    */
+  waitForDisconnectSignal?: AbortSignal;
+
+  /**
+    * Amount of time in milliseonds the system will wait for an agent to join the room, before
+    * emitting an AgentSessionEvent.AgentConnectionFailure event.
+    */
+  agentConnectTimeoutMilliseconds?: number;
 
   // FIXME: not sure about this pattern, background thinking is that it would be good to be able to
   // abstract away enabling relevant media tracks to the caller so they don't have to interface with
@@ -49,6 +61,9 @@ export type AgentSessionOptions = {
   };
 };
 
+// FIXME: make this 10 seconds once room dispatch booting info is discoverable
+const DEFAULT_AGENT_CONNECT_TIMEOUT_MILLISECONDS = 20_000;
+
 
 /**
   * AgentSession represents a connection to a LiveKit Agent, providing abstractions to make 1:1
@@ -60,8 +75,9 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
   agent: Agent | null = null;
   messageSender: MessageSender | null = null;
   messageReceiver: MessageReceiver | null = null;
+  protected agentConnectTimeoutMilliseconds: AgentSessionOptions["agentConnectTimeoutMilliseconds"] | null = null;
 
-  private connectionCredentialsProvider: ConnectionCredentialsProvider;
+  protected connectionCredentialsProvider: ConnectionCredentialsProvider;
 
   constructor(provider: ConnectionCredentialsProvider) {
     super();
@@ -80,11 +96,13 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
 
   async connect(options: AgentSessionOptions = {}) {
     const {
-      connectSignal,
+      waitForDisconnectSignal,
+      agentConnectTimeoutMilliseconds = DEFAULT_AGENT_CONNECT_TIMEOUT_MILLISECONDS,
       tracks = { microphone: { enabled: true, publishOptions: { preConnectBuffer: true } } },
     } = options;
+    this.agentConnectTimeoutMilliseconds = agentConnectTimeoutMilliseconds;
 
-    await this.waitUntilRoomDisconnected(connectSignal);
+    await this.waitUntilRoomDisconnected(waitForDisconnectSignal);
 
     await Promise.all([
       this.connectionCredentialsProvider.generate().then(connection => (
@@ -164,7 +182,7 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
         this.emit(AgentSessionEvent.AgentConnectionFailure, reason);
         this.disconnect();
       }
-    }, 10_000);
+    }, this.agentConnectTimeoutMilliseconds ?? DEFAULT_AGENT_CONNECT_TIMEOUT_MILLISECONDS);
   }
 
   private handleAgentStateChanged = async (newAgentState: AgentState) => {
