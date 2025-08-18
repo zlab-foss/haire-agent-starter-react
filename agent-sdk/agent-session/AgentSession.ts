@@ -1,6 +1,6 @@
 import type TypedEventEmitter from 'typed-emitter';
 import { EventEmitter } from "events";
-import { Room, RoomEvent, ConnectionState } from 'livekit-client';
+import { Room, RoomEvent, ConnectionState, TrackPublishOptions } from 'livekit-client';
 
 import {
   type ReceivedMessage,
@@ -37,6 +37,16 @@ export type AgentSessionCallbacks = {
 
 export type AgentSessionOptions = {
   connectSignal?: AbortSignal;
+
+  // FIXME: not sure about this pattern, background thinking is that it would be good to be able to
+  // abstract away enabling relevant media tracks to the caller so they don't have to interface with
+  // the room.
+  tracks?: {
+    microphone?: {
+      enabled?: boolean;
+      publishOptions?: TrackPublishOptions;
+    };
+  };
 };
 
 
@@ -71,6 +81,7 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
   async connect(options: AgentSessionOptions = {}) {
     const {
       connectSignal,
+      tracks = { microphone: { enabled: true, publishOptions: { preConnectBuffer: true } } },
     } = options;
 
     await this.waitUntilRoomDisconnected(connectSignal);
@@ -79,8 +90,11 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
       this.connectionCredentialsProvider.generate().then(connection => (
         this.room.connect(connection.serverUrl, connection.participantToken)
       )),
-      // FIXME: make it so the preconenct buffer thing can be disabled?
-      this.room.localParticipant.setMicrophoneEnabled(true, undefined, { preConnectBuffer: true }),
+
+      // Start microphone (with preconnect buffer) by default
+      tracks.microphone?.enabled ? (
+        this.room.localParticipant.setMicrophoneEnabled(true, undefined, tracks.microphone?.publishOptions ?? {})
+      ) : Promise.resolve(),
     ]);
 
     await this.waitUntilAgentIsAvailable();
