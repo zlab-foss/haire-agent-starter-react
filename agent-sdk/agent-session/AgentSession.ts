@@ -35,6 +35,10 @@ export type AgentSessionCallbacks = {
   [AgentSessionEvent.Disconnected]: () => void;
 };
 
+export type AgentSessionOptions = {
+  connectSignal?: AbortSignal;
+};
+
 
 /**
   * AgentSession represents a connection to a LiveKit Agent, providing abstractions to make 1:1
@@ -64,8 +68,13 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
     });
   }
 
-  async connect() {
-    // await this.waitUntilRoomDisconnected()
+  async connect(options: AgentSessionOptions = {}) {
+    const {
+      connectSignal,
+    } = options;
+
+    await this.waitUntilRoomDisconnected(connectSignal);
+
     await Promise.all([
       this.connectionCredentialsProvider.generate().then(connection => (
         this.room.connect(connection.serverUrl, connection.participantToken)
@@ -190,26 +199,42 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
   }
 
   private async waitUntilRoomConnected(signal?: AbortSignal) {
-    if (this.room.state === ConnectionState.Connected /* FIXME: should I check for other states too? */) {
+    return this.waitUntilRoomState(
+      ConnectionState.Connected, /* FIXME: should I check for other states too? */
+      RoomEvent.Connected,
+      signal,
+    );
+  }
+
+  private async waitUntilRoomDisconnected(signal?: AbortSignal) {
+    return this.waitUntilRoomState(
+      ConnectionState.Disconnected,
+      RoomEvent.Disconnected,
+      signal,
+    );
+  }
+
+  private async waitUntilRoomState(state: ConnectionState, stateMonitoringEvent: RoomEvent, signal?: AbortSignal) {
+    if (this.room.state === state) {
       return;
     }
 
     return new Promise<void>((resolve, reject) => {
-      const onceRoomConnected = () => {
+      const onceRoomEventOccurred = () => {
         cleanup();
         resolve();
       };
       const abortHandler = () => {
         cleanup();
-        reject(new Error('AgentSession.waitUntilRoomConnected - signal aborted'));
+        reject(new Error(`AgentSession.waitUntilRoomState(${state}, ...) - signal aborted`));
       };
 
       const cleanup = () => {
-        this.room.off(RoomEvent.Connected, onceRoomConnected);
+        this.room.off(stateMonitoringEvent, onceRoomEventOccurred);
         signal?.removeEventListener('abort', abortHandler);
       };
 
-      this.room.on(RoomEvent.Connected, onceRoomConnected);
+      this.room.on(stateMonitoringEvent, onceRoomEventOccurred);
       signal?.addEventListener('abort', abortHandler);
     });
   }
