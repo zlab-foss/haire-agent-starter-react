@@ -67,7 +67,7 @@ export function useAgentMessages() {
       aggregator?.off(ReceivedMessageAggregatorEvent.Updated, handleUpdated);
       setMessagesState(null);
     };
-  }, [agentSession]);
+  }, [agentSession, agentSession.isAvailable]);
 
   const send = useCallback(async (message: SentMessage) => {
     return agentSession.sendMessage(message);
