@@ -227,9 +227,11 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
 
     const aggregator = new ReceivedMessageAggregator(options);
     this.on(AgentSessionEvent.MessageReceived, aggregator.upsert);
+    this.on(AgentSessionEvent.Disconnected, aggregator.close);
 
     const closeHandler = () => {
       this.off(AgentSessionEvent.MessageReceived, aggregator.upsert);
+      this.off(AgentSessionEvent.Disconnected, aggregator.close);
       aggregator.off(ReceivedMessageAggregatorEvent.Close, closeHandler);
     };
     aggregator.on(ReceivedMessageAggregatorEvent.Close, closeHandler);
