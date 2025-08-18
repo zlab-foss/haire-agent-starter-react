@@ -42,22 +42,22 @@ export default class ReceivedMessageAggregator<Message extends ReceivedMessage> 
     return aggregator;
   }
 
-  upsert(message: Message) {
+  upsert = (message: Message) => {
     this.internalBulkUpsert([message]);
     this.emit(ReceivedMessageAggregatorEvent.Updated);
   }
 
-  delete(message: Message) {
+  delete = (message: Message) => {
     this.internalBulkDelete([message.id]);
     this.emit(ReceivedMessageAggregatorEvent.Updated);
   }
 
-  extend(input: Iterable<Message>) {
+  extend = (input: Iterable<Message>) => {
     this.internalBulkUpsert(input);
     this.emit(ReceivedMessageAggregatorEvent.Updated);
   }
 
-  clear() {
+  clear = () => {
     this.messageById.clear();
     this.messageIds = [];
   }
@@ -113,7 +113,7 @@ export default class ReceivedMessageAggregator<Message extends ReceivedMessage> 
     return Array.from(this);
   }
 
-  close() {
+  close = () => {
     this.closed = true;
     this.emit(ReceivedMessageAggregatorEvent.Close);
   }
