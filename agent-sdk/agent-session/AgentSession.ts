@@ -44,8 +44,6 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
   agent: Agent | null = null;
   messageSender: MessageSender | null = null;
   messageReceiver: MessageReceiver | null = null;
-  defaultAggregator: ReceivedMessageAggregator<ReceivedMessage> | null = null;
-  aggregators: Array<ReceivedMessageAggregator<ReceivedMessage>> | null = null;
 
   private connectionCredentialsProvider: ConnectionCredentialsProvider;
 
@@ -109,9 +107,6 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
       }
     })();
 
-    this.defaultAggregator = new ReceivedMessageAggregator();
-    this.aggregators = [];
-
     this.startAgentConnectedTimeout();
   }
 
@@ -123,13 +118,6 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
 
     this.messageReceiver?.close();
     this.messageReceiver = null;
-
-    this.defaultAggregator?.close();
-    this.defaultAggregator = null;
-    for (const aggregator of this.aggregators ?? []) {
-      aggregator.close();
-    }
-    this.aggregators = null;
 
     if (this.agentConnectedTimeout) {
       clearTimeout(this.agentConnectedTimeout);
@@ -161,18 +149,6 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
   };
 
   private handleIncomingMessage = (incomingMessage: ReceivedMessage) => {
-    if (!this.defaultAggregator) {
-      throw new Error('AgentSession.defaultAggregator is unset');
-    }
-    if (!this.aggregators) {
-      throw new Error('AgentSession.aggregators is unset');
-    }
-
-    this.defaultAggregator.upsert(incomingMessage);
-    for (const aggregator of this.aggregators) {
-      aggregator.upsert(incomingMessage);
-    }
-
     this.emit(AgentSessionEvent.MessageReceived, incomingMessage);
   }
 
@@ -242,37 +218,14 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
     * Create a ReceivedMessageAggregator, which allows one to view a snapshot of all received
     * messages at the current time.
     */
-  async createMessageAggregator(options: { startsAt?: 'beginning' | 'now' } & ReceivedMessageAggregatorOptions = {}) {
+  async createMessageAggregator(options: ReceivedMessageAggregatorOptions = {}) {
     await this.waitUntilRoomConnected();
-    if (!this.aggregators) {
-      throw new Error('AgentSession.aggregators is unset');
-    }
-    const aggregators = this.aggregators; // FIXME: this caching could lead to issues if this.aggregators changed reference?
 
-    const { startsAt, ...aggregatorOptions } = {
-      startsAt: 'beginning' as const,
-      ...options,
-    };
+    const aggregator = new ReceivedMessageAggregator(options);
+    this.on(AgentSessionEvent.MessageReceived, aggregator.upsert);
 
-    let aggregator;
-    switch (startsAt) {
-      case 'now':
-        aggregator = new ReceivedMessageAggregator(aggregatorOptions);
-        break;
-
-      case 'beginning':
-        aggregator = ReceivedMessageAggregator.fromIterator(this.defaultAggregator ?? [], aggregatorOptions);
-        break;
-    }
-
-    aggregators.push(aggregator);
     const closeHandler = () => {
-      const aggregatorIndex = aggregators.indexOf(aggregator);
-      if (aggregatorIndex < 0) {
-        throw new Error(`Index of aggregator was non integer (found ${aggregatorIndex}), has this aggregator already been closed previously?`);
-      }
-      aggregators.splice(aggregatorIndex, 1);
-
+      this.off(AgentSessionEvent.MessageReceived, aggregator.upsert);
       aggregator.off(ReceivedMessageAggregatorEvent.Close, closeHandler);
     };
     aggregator.on(ReceivedMessageAggregatorEvent.Close, closeHandler);
