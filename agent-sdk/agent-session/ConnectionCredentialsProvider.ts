@@ -28,7 +28,7 @@ export abstract class ConnectionCredentialsProvider {
 
   async generate() {
     if (this.isCachedConnectionDetailsExpired()) {
-      this.refresh();
+      await this.refresh();
     }
 
     return this.cachedConnectionDetails!;
