@@ -41,7 +41,7 @@ export function useAgentMessages() {
   const agentSession = useAgentSession();
 
   const [messagesState, setMessagesState] = useState<
-    Array<ReceivedMessage | SentMessage> | null
+    Array<ReceivedMessage> | null
   >(null);
   useEffect(() => {
     let aggregator: ReceivedMessageAggregator<ReceivedMessage> | null = null;
@@ -53,7 +53,7 @@ export function useAgentMessages() {
       setMessagesState(aggregator.toArray());
     };
 
-    agentSession.createMessageAggregator({ startsAt: 'beginning' }).then(agg => {
+    agentSession.createMessageAggregator().then(agg => {
       aggregator = agg;
       setMessagesState(aggregator.toArray());
       aggregator.on(ReceivedMessageAggregatorEvent.Updated, handleUpdated);
