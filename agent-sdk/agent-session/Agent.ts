@@ -3,8 +3,7 @@ import { EventEmitter } from "events";
 import { ConnectionState, ParticipantEvent, ParticipantKind, RemoteParticipant, Room, RoomEvent, Track } from 'livekit-client';
 import { getParticipantTrackRefs, participantTrackEvents, TrackReference } from '@/agent-sdk/external-deps/components-js';
 import { ParticipantEventCallbacks } from '@/agent-sdk/external-deps/client-sdk-js';
-
-const stateAttribute = 'lk.agent.state';
+import { ParticipantAttributes } from '@/agent-sdk/lib/participant-attributes';
 
 /** State representing the current connection status to the server hosted agent */
 export type AgentConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'signalReconnecting';
@@ -82,12 +81,12 @@ export default class Agent extends (EventEmitter as new () => TypedEventEmitter<
 
   private updateParticipants() {
     const newAgentParticipant = this.roomRemoteParticipants.find(
-      (p) => p.kind === ParticipantKind.AGENT && !('lk.publish_on_behalf' in p.attributes),
+      (p) => p.kind === ParticipantKind.AGENT && !(ParticipantAttributes.publishOnBehalf in p.attributes),
     ) ?? null;
     const newWorkerParticipant = newAgentParticipant ? (
       this.roomRemoteParticipants.find(
         (p) =>
-          p.kind === ParticipantKind.AGENT && p.attributes['lk.publish_on_behalf'] === newAgentParticipant.identity,
+          p.kind === ParticipantKind.AGENT && p.attributes[ParticipantAttributes.publishOnBehalf] === newAgentParticipant.identity,
       ) ?? null
     ) : null;
 
@@ -161,7 +160,7 @@ export default class Agent extends (EventEmitter as new () => TypedEventEmitter<
     } else if (
       roomConnectionState === ConnectionState.Connecting ||
       !this.agentParticipant ||
-      !this.attributes[stateAttribute]
+      !this.attributes[ParticipantAttributes.state]
     ) {
       newConnectionState = 'connecting';
     } else {
@@ -189,9 +188,9 @@ export default class Agent extends (EventEmitter as new () => TypedEventEmitter<
       newConversationalState = 'listening';
     }
 
-    if (this.agentParticipant && this.attributes[stateAttribute]) {
+    if (this.agentParticipant && this.attributes[ParticipantAttributes.state]) {
       // ref: https://github.com/livekit/agents/blob/65170238db197f62f479eb7aaef1c0e18bfad6e7/livekit-agents/livekit/agents/voice/events.py#L97
-      const agentState = this.attributes[stateAttribute] as 'initializing' | 'idle' | 'listening' | 'thinking' | 'speaking';
+      const agentState = this.attributes[ParticipantAttributes.state] as 'initializing' | 'idle' | 'listening' | 'thinking' | 'speaking';
       newConversationalState = agentState;
     }
 
