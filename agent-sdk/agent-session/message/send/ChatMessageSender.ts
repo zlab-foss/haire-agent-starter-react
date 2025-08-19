@@ -1,6 +1,6 @@
 import { LocalParticipant } from "livekit-client";
 
-import { type ReceivedChatLoopbackMessage, type SentChatMessage, type SentMessage } from "..";
+import { type ReceivedChatLoopbackMessage, type SentChatMessage } from "..";
 import MessageSender from "./MessageSender";
 import MessageReceiver from "../receive/MessageReceiver";
 
@@ -13,10 +13,6 @@ export default class ChatMessageSender extends MessageSender<SentChatMessage> {
   constructor(localParticipant: LocalParticipant) {
     super();
     this.localParticipant = localParticipant;
-  }
-
-  canSend(message: SentMessage): message is SentChatMessage {
-    return message.content.type === 'chat';
   }
 
   async send(message: SentChatMessage) {
