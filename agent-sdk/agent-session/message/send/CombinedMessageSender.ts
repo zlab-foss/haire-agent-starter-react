@@ -1,4 +1,4 @@
-import { type SentMessage } from "..";
+import { SentMessageOptions, type SentMessage } from "..";
 import MessageSender from "./MessageSender";
 
 /**
@@ -13,9 +13,9 @@ export default class CombinedMessageSender extends MessageSender {
     this.messageSenders = messageSenders;
   }
 
-  async send(message: SentMessage) {
+  async send(message: SentMessage, options: SentMessageOptions<SentMessage>) {
     await Promise.all(this.messageSenders.map(async (sender) => {
-      return sender.send(message);
+      return sender.send(message, options);
     }));
   }
 }

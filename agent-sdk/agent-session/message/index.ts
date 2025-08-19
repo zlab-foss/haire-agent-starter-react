@@ -1,3 +1,4 @@
+import { SendTextOptions } from 'livekit-client';
 import { TextStreamInfo } from '@/agent-sdk/external-deps/client-sdk-js';
 
 export type BaseMessageId = string;
@@ -23,8 +24,13 @@ export type ReceivedMessage =
   // TODO: images? attachments? rpc?
 
 export type SentChatMessage = BaseMessage<'outbound', | { type: 'chat', text: string }>;
+export type SentChatMessageOptions = SendTextOptions | undefined;
+
 export type SentMessage =
   | SentChatMessage;
+
+export type SentMessageOptions<Message extends SentMessage> =
+  | (Message extends SentChatMessage ? SentChatMessageOptions : never);
 
 // FIXME: maybe update all these functions to not have default exports as to avoid the duplicate
 // names being written here?

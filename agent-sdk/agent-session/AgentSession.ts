@@ -14,6 +14,8 @@ import {
   ReceivedMessageAggregator,
   type ReceivedMessageAggregatorOptions,
   ReceivedMessageAggregatorEvent,
+  SentMessageOptions,
+  SentChatMessageOptions,
 } from "./message";
 import Agent, { AgentConnectionState, AgentConversationalState, AgentEvent } from './Agent';
 import { ConnectionCredentialsProvider } from './ConnectionCredentialsProvider';
@@ -323,9 +325,10 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
     return aggregator;
   }
 
-  // FIXME: maybe there should be a special case where if message is `string` it is converted into
-  // a `SentChatMessage`?
-  async sendMessage(message: SentMessage | string) {
+  async sendMessage<Message extends SentMessage | string>(
+    message: Message,
+    options: Message extends SentMessage ? SentMessageOptions<Message> : SentChatMessageOptions,
+  ) {
     if (!this.messageSender) {
       throw new Error('AgentSession.sendMessage - cannot send message until room is connected and MessageSender initialized!');
     }
@@ -335,7 +338,7 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
       timestamp: new Date(),
       content: { type: 'chat', text: message },
     } : message;
-    await this.messageSender.send(constructedMessage);
+    await this.messageSender.send(constructedMessage, options);
   }
   // onMessage?: (callback: (reader: TextStreamReader) => void) => void | undefined;
 

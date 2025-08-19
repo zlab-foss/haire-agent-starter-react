@@ -1,12 +1,12 @@
 import { LocalParticipant } from "livekit-client";
 
-import { type ReceivedChatLoopbackMessage, type SentChatMessage } from "..";
+import { SentMessage, SentMessageOptions, type ReceivedChatLoopbackMessage, type SentChatMessage } from "..";
 import MessageSender from "./MessageSender";
 import MessageReceiver from "../receive/MessageReceiver";
 
 
 /** A `MessageSender` for sending chat messages via the `lk.chat` datastream topic. */
-export default class ChatMessageSender extends MessageSender<SentChatMessage> {
+export default class ChatMessageSender extends MessageSender {
   private localParticipant: LocalParticipant;
   private loopbackReceiverCallbacks: Set<(incomingMessage: SentChatMessage) => void> = new Set();
 
@@ -15,12 +15,23 @@ export default class ChatMessageSender extends MessageSender<SentChatMessage> {
     this.localParticipant = localParticipant;
   }
 
-  async send(message: SentChatMessage) {
+  isSentChatMessage(message: SentMessage): message is SentChatMessage {
+    return message.content.type === 'chat';
+  }
+
+  async send(message: SentChatMessage, options: SentMessageOptions<SentChatMessage>) {
+    if (!this.isSentChatMessage(message)) {
+      return;
+    }
+    // FIXME: maybe there's a more elegant way of doing this, where it also
+    // gets checked as part of `isSentChatMessage`?
+    const chatMessageOptions = options as SentMessageOptions<typeof message>;
+
     for (const callback of this.loopbackReceiverCallbacks) {
       callback(message);
     }
 
-    await this.localParticipant.sendText(message.content.text, /* FIXME: options here? */);
+    await this.localParticipant.sendText(message.content.text, chatMessageOptions);
 
     // FIXME: do I need to handle sending legacy chat messages too?
     // const legacyChatMsg: LegacyChatMessage = {

@@ -13,7 +13,7 @@ import {
 import { TrackReference, trackSourceToProtocol } from "@/agent-sdk/external-deps/components-js";
 import { ParticipantEventCallbacks } from "../node_modules/livekit-client/src/room/participant/Participant";
 import { AgentSession, AgentSessionCallbacks, AgentSessionEvent } from "./agent-session/AgentSession";
-import { ReceivedMessage, ReceivedMessageAggregator, ReceivedMessageAggregatorEvent, SentMessage } from "./agent-session/message";
+import { ReceivedMessage, ReceivedMessageAggregator, ReceivedMessageAggregatorEvent, SentChatMessageOptions, SentMessage, SentMessageOptions } from "./agent-session/message";
 import { AgentCallbacks, AgentEvent } from "./agent-session/Agent";
 import { ParticipantPermission } from "livekit-server-sdk";
 import { usePersistentUserChoices } from "@livekit/components-react";
@@ -69,8 +69,11 @@ export function useAgentMessages() {
     };
   }, [agentSession, agentSession.isAvailable]);
 
-  const send = useCallback(async (message: SentMessage) => {
-    return agentSession.sendMessage(message);
+  const send = useCallback(async <Message extends SentMessage | string>(
+    message: SentMessage | string,
+    options: Message extends SentMessage ? SentMessageOptions<Message> : SentChatMessageOptions,
+  ) => {
+    return agentSession.sendMessage(message, options);
   }, [agentSession]);
 
   const { messages, ready } = useMemo(() => {

@@ -1,5 +1,5 @@
-import { type SentMessage } from "..";
+import { SentMessageOptions, type SentMessage } from "..";
 
-export default abstract class MessageSender<Message extends SentMessage = SentMessage> {
-  abstract send(message: Message): Promise<void>;
+export default abstract class MessageSender {
+  abstract send(message: SentMessage, options: SentMessageOptions<SentMessage>): Promise<void>;
 }
