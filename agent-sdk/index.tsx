@@ -1,7 +1,10 @@
 import * as React from "react";
 import { useContext, useEffect, useState, useCallback, useMemo } from "react";
 import {
+  Room,
   AudioCaptureOptions,
+  LocalAudioTrack,
+  LocalVideoTrack,
   Participant,
   ParticipantEvent,
   ScreenShareCaptureOptions,
@@ -9,10 +12,11 @@ import {
   TrackPublication,
   TrackPublishOptions,
   VideoCaptureOptions,
+  LocalTrack,
 } from "livekit-client";
 import { TrackReference, trackSourceToProtocol } from "@/agent-sdk/external-deps/components-js";
 import { ParticipantEventCallbacks } from "../node_modules/livekit-client/src/room/participant/Participant";
-import { AgentSession, AgentSessionCallbacks, AgentSessionEvent } from "./agent-session/AgentSession";
+import { AgentSession, AgentSessionCallbacks, AgentSessionEvent, SwitchActiveDeviceOptions } from "./agent-session/AgentSession";
 import { ReceivedMessage, ReceivedMessageAggregator, ReceivedMessageAggregatorEvent, SentChatMessageOptions, SentMessage, SentMessageOptions } from "./agent-session/message";
 import { AgentCallbacks, AgentEvent } from "./agent-session/Agent";
 import { ParticipantPermission } from "livekit-server-sdk";
@@ -445,6 +449,76 @@ export function useAgentLocalParticipant(options?: {
       ) => setScreenShareEnabled(!screenShareTrackEnabled, captureOptions, publishOptions), [screenShareTrackEnabled, setScreenShareEnabled]),
     },
   };
+}
+
+export function useAgentMediaDeviceSelect({ kind, requestPermissions, onError }: {
+  kind: MediaDeviceKind,
+  requestPermissions?: boolean;
+  onError?: (error: Error) => void;
+}) {
+  const agentSession = useAgentSession();
+
+  // List of all devices.
+  const [devices, setDevices] = useState<Array<MediaDeviceInfo>>([]);
+  useEffect(() => {
+    const onDeviceChange = async () => {
+      const devicesPromise = Room.getLocalDevices(kind, requestPermissions).then(setDevices);
+      if (onError) {
+        return devicesPromise.catch(onError);
+      } else {
+        return devicesPromise;
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      if (!window.isSecureContext) {
+        throw new Error(
+          `Accessing media devices is available only in secure contexts (HTTPS and localhost), in some or all supporting browsers. See: https://developer.mozilla.org/en-US/docs/Web/API/Navigator/mediaDevices`,
+        );
+      }
+      navigator?.mediaDevices?.addEventListener('devicechange', onDeviceChange);
+    }
+
+    return () => {
+      navigator?.mediaDevices?.removeEventListener('devicechange', onDeviceChange);
+    };
+  }, [kind, requestPermissions, onError]);
+
+  // Active device management.
+  const [currentDeviceId, setCurrentDeviceId] = useState(
+    agentSession.getActiveDevice(kind) ?? 'default',
+  );
+  const setActiveMediaDevice = useCallback(async (id: string, options: SwitchActiveDeviceOptions = {}) => {
+    // FIXME: use actual logger of some sort?
+    console.debug(`Switching active device of kind "${kind}" with id ${id}.`);
+    await agentSession.switchActiveDevice(kind, id, options);
+
+    const actualDeviceId: string | undefined = agentSession.getActiveDevice(kind) ?? id;
+    if (actualDeviceId !== id && id !== 'default') {
+      // FIXME: use actual logger of some sort?
+      console.info(
+        `We tried to select the device with id (${id}), but the browser decided to select the device with id (${actualDeviceId}) instead.`,
+      );
+    }
+
+    let targetTrack: LocalTrack | undefined = undefined;
+    if (kind === 'audioinput') {
+      targetTrack = agentSession.room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track;
+    } else if (kind === 'videoinput') {
+      targetTrack = agentSession.room.localParticipant.getTrackPublication(Track.Source.Camera)?.track;
+    }
+
+    const useDefault =
+      (id === 'default' && !targetTrack) ||
+      (id === 'default' && targetTrack?.mediaStreamTrack.label.startsWith('Default'));
+
+    let newCurrentDeviceId = useDefault ? id : actualDeviceId;
+    if (newCurrentDeviceId) {
+      setCurrentDeviceId(newCurrentDeviceId);
+    }
+  }, [agentSession]);
+
+  return { devices, activeDeviceId: currentDeviceId, setActiveMediaDevice };
 }
 
 // hook ideas:

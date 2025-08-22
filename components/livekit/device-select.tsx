@@ -2,7 +2,7 @@
 
 import { cva } from 'class-variance-authority';
 import { LocalAudioTrack, LocalVideoTrack } from 'livekit-client';
-import { useMaybeRoomContext, useMediaDeviceSelect } from '@livekit/components-react';
+// import { useMaybeRoomContext, useMediaDeviceSelect } from '@livekit/components-react';
 import {
   Select,
   SelectContent,
@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { useAgentMediaDeviceSelect } from '@/agent-sdk';
 
 type DeviceSelectProps = React.ComponentProps<typeof SelectTrigger> & {
   kind: MediaDeviceKind;
@@ -53,14 +54,19 @@ export function DeviceSelect({
 }: DeviceSelectProps) {
   const size = props.size || 'default';
 
-  const room = useMaybeRoomContext();
-  const { devices, activeDeviceId, setActiveMediaDevice } = useMediaDeviceSelect({
+  const { devices, activeDeviceId, setActiveMediaDevice } = useAgentMediaDeviceSelect({
     kind,
-    room,
-    track,
     requestPermissions,
     onError: onMediaDeviceError,
   });
+
+  // const { devices, activeDeviceId, setActiveMediaDevice } = useMediaDeviceSelect({
+  //   kind,
+  //   room: agentSession.room,
+  //   track,
+  //   requestPermissions,
+  //   onError: onMediaDeviceError,
+  // });
   return (
     <Select value={activeDeviceId} onValueChange={setActiveMediaDevice}>
       <SelectTrigger className={cn(selectVariants({ size }), props.className)}>

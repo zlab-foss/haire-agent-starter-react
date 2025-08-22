@@ -71,6 +71,14 @@ export type AgentSessionOptions = {
 const DEFAULT_AGENT_CONNECT_TIMEOUT_MILLISECONDS = 20_000;
 
 
+export type SwitchActiveDeviceOptions = {
+  /**
+   *  If true, adds an `exact` constraint to the getUserMedia request.
+   *  The request will fail if this option is true and the device specified is not actually available
+   */
+  exact?: boolean;
+};
+
 /**
   * AgentSession represents a connection to a LiveKit Agent, providing abstractions to make 1:1
   * agent/participant rooms easier to work with.
@@ -348,6 +356,14 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
     await this.messageSender.send(constructedMessage, options);
   }
   // onMessage?: (callback: (reader: TextStreamReader) => void) => void | undefined;
+
+  getActiveDevice(kind: MediaDeviceKind) {
+    return this.room.getActiveDevice(kind)
+  }
+
+  switchActiveDevice(kind: MediaDeviceKind, deviceId: string, options: SwitchActiveDeviceOptions = {}) {
+    return this.room.switchActiveDevice(kind, deviceId, options.exact)
+  }
 
   // TODO: RPC stuff
   // registerRpcHandler: (
