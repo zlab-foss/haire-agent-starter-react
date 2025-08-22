@@ -28,6 +28,7 @@ export enum AgentSessionEvent {
   Disconnected = 'disconnected',
   AgentConnectionFailure = 'agentConnectionFailure',
   AudioPlaybackStatusChanged = 'AudioPlaybackStatusChanged',
+  MediaDevicesError = 'MediaDevicesError',
 }
 
 export type AgentSessionCallbacks = {
@@ -37,6 +38,7 @@ export type AgentSessionCallbacks = {
   [AgentSessionEvent.AgentConnectionFailure]: (reason: string) => void;
   [AgentSessionEvent.AudioPlaybackStatusChanged]: (audioPlaybackPermitted: boolean) => void;
   [AgentSessionEvent.Disconnected]: () => void;
+  [AgentSessionEvent.MediaDevicesError]: (error: Error) => void;
 };
 
 export type AgentSessionOptions = {
@@ -91,6 +93,7 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
     this.room.on(RoomEvent.Connected, this.handleRoomConnected);
     this.room.on(RoomEvent.Disconnected, this.handleRoomDisconnected);
     this.room.on(RoomEvent.AudioPlaybackStatusChanged, this.handleAudioPlaybackStatusChanged);
+    this.room.on(RoomEvent.MediaDevicesError, this.handleMediaDevicesError);
 
     this.prepareConnection().catch(err => {
       // FIXME: figure out a better logging solution?
@@ -201,6 +204,10 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
 
   private handleAudioPlaybackStatusChanged = async () => {
     this.emit(AgentSessionEvent.AudioPlaybackStatusChanged, this.room.canPlaybackAudio);
+  };
+
+  private handleMediaDevicesError = async (error: Error) => {
+    this.emit(AgentSessionEvent.MediaDevicesError, error);
   };
 
   private handleIncomingMessage = (incomingMessage: ReceivedMessage) => {
