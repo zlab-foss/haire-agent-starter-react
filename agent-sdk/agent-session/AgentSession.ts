@@ -587,7 +587,8 @@ export function createAgentSession(
       ) : Promise.resolve(),
     ]);
 
-    await waitUntilAgentIsAvailable();
+    await waitUntilRoomConnected();
+    await get().agent!.waitUntilAvailable();
   };
   const disconnect = async () => {
     await get().subtle.room.disconnect();
@@ -622,44 +623,18 @@ export function createAgentSession(
 
   const startAgentConnectedTimeout = (agentConnectTimeoutMilliseconds: AgentSessionOptions["agentConnectTimeoutMilliseconds"] | null) => {
     return setTimeout(() => {
-      const state = get();
-      if (!state.isAvailable) {
+      const { connectionState, agent, disconnect } = get();
+      if (!agent?.isAvailable) {
         const reason =
-          state.connectionState === 'connecting'
+          connectionState === 'connecting'
             ? 'Agent did not join the room. '
             : 'Agent connected but did not complete initializing. ';
 
         emitter.emit(AgentSessionEvent.AgentConnectionFailure, reason);
-        state.disconnect();
+        console.error('!! AGENT WAS NOT CONNECTED WITHIN TIMEOUT!');
+        disconnect();
       }
     }, agentConnectTimeoutMilliseconds ?? DEFAULT_AGENT_CONNECT_TIMEOUT_MILLISECONDS);
-  };
-
-  /** Returns a promise that resolves once the agent is available for interaction */
-  const waitUntilAgentIsAvailable = async (signal?: AbortSignal) => {
-    return new Promise<void>((resolve, reject) => {
-      const stateChangedHandler = () => {
-        if (!get().isAvailable) {
-          return;
-        }
-        cleanup();
-        resolve();
-      };
-      const abortHandler = () => {
-        cleanup();
-        reject(new Error('AgentSession.waitUntilAgentIsAvailable - signal aborted'));
-      };
-
-      const cleanup = () => {
-        emitter.off(AgentSessionEvent.AgentConnectionStateChanged, stateChangedHandler);
-        emitter.off(AgentSessionEvent.AgentConversationalStateChanged, stateChangedHandler);
-        signal?.removeEventListener('abort', abortHandler);
-      };
-
-      emitter.on(AgentSessionEvent.AgentConnectionStateChanged, stateChangedHandler);
-      emitter.on(AgentSessionEvent.AgentConversationalStateChanged, stateChangedHandler);
-      signal?.addEventListener('abort', abortHandler);
-    });
   };
 
   const waitUntilRoomConnected = async (signal?: AbortSignal) => {
