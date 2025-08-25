@@ -412,8 +412,10 @@ export type AgentSessionInstance = {
   agent: AgentInstance | null;
 
   connectionState: AgentConnectionState;
-  conversationalState: AgentConversationalState;
-  isAvailable: boolean;
+  isConnected: boolean;
+
+  waitUntilRoomConnected: (signal?: AbortSignal) => void;
+  waitUntilRoomDisconnected: (signal?: AbortSignal) => void;
 
   agentConnectTimeout: {
     delayInMilliseconds: number;
@@ -745,15 +747,10 @@ export function createAgentSession(
     agent: null,
 
     connectionState: 'disconnected',
+    ...generateDerivedConnectionStateValues('disconnected'),
 
-    /** Is the agent ready for user interaction? */
-    get isAvailable() {
-      return (
-        get().conversationalState === 'listening' ||
-        get().conversationalState === 'thinking' ||
-        get().conversationalState === 'speaking'
-      );
-    },
+    waitUntilRoomConnected,
+    waitUntilRoomDisconnected,
 
     agentConnectTimeout: null,
 

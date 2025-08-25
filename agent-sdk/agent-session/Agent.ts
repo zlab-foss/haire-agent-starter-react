@@ -241,6 +241,12 @@ export type AgentInstance = {
 
   conversationalState: AgentConversationalState;
 
+  /** Is the agent ready for user interaction? */
+  isAvailable: boolean;
+
+  /** Returns a promise that resolves once the agent is available for interaction */
+  waitUntilAvailable: (signal?: AbortSignal) => Promise<void>;
+
   // FIXME: consider dropping TrackReference?
   audioTrack: TrackReference | null;
   videoTrack: TrackReference | null;
@@ -290,6 +296,30 @@ export function createAgent(
     room.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
     room.off(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
     room.localParticipant.off(ParticipantEvent.TrackPublished, handleLocalParticipantTrackPublished)
+  };
+
+  const waitUntilAvailable = async (signal?: AbortSignal) => {
+    return new Promise<void>((resolve, reject) => {
+      const stateChangedHandler = () => {
+        if (!get().isAvailable) {
+          return;
+        }
+        cleanup();
+        resolve();
+      };
+      const abortHandler = () => {
+        cleanup();
+        reject(new Error('AgentInstance.waitUntilAgentIsAvailable - signal aborted'));
+      };
+
+      const cleanup = () => {
+        emitter.off(AgentEvent.AgentConversationalStateChanged, stateChangedHandler);
+        signal?.removeEventListener('abort', abortHandler);
+      };
+
+      emitter.on(AgentEvent.AgentConversationalStateChanged, stateChangedHandler);
+      signal?.addEventListener('abort', abortHandler);
+    });
   };
 
   const handleAttributesChanged = (attributes: Record<string, string>) => {
@@ -408,10 +438,21 @@ export function createAgent(
     console.log('!! CONVERSATIONAL STATE:', newConversationalState);
 
     if (conversationalState !== newConversationalState) {
-      set((old) => ({ ...old, conversationalState: newConversationalState }));
+      set((old) => ({
+        ...old,
+        conversationalState: newConversationalState,
+        ...generateDerivedConversationalStateValues(newConversationalState),
+      }));
       emitter.emit(AgentEvent.AgentConversationalStateChanged, newConversationalState);
     }
   };
+  const generateDerivedConversationalStateValues = (conversationalState: AgentInstance["conversationalState"]) => ({
+    isAvailable: (
+      conversationalState === 'listening' ||
+      conversationalState === 'thinking' ||
+      conversationalState === 'speaking'
+    ),
+  });
 
   return {
     [Symbol.toStringTag]: "AgentInstance",
@@ -420,6 +461,9 @@ export function createAgent(
     teardown,
 
     conversationalState: 'disconnected',
+    ...generateDerivedConversationalStateValues('disconnected'),
+
+    waitUntilAvailable,
 
     audioTrack: null,
     videoTrack: null,
