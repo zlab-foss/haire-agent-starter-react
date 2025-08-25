@@ -26,6 +26,7 @@ export enum AgentSessionEvent {
   AgentConversationalStateChanged = 'agentConversationalStateChanged',
   AgentAttributesChanged = 'agentAttributesChanged',
   MessageReceived = 'messageReceived',
+  Connected = 'connected',
   Disconnected = 'disconnected',
   AgentConnectionFailure = 'agentConnectionFailure',
   AudioPlaybackStatusChanged = 'AudioPlaybackStatusChanged',
@@ -38,6 +39,7 @@ export type AgentSessionCallbacks = {
   [AgentSessionEvent.MessageReceived]: (newMessage: ReceivedMessage) => void;
   [AgentSessionEvent.AgentConnectionFailure]: (reason: string) => void;
   [AgentSessionEvent.AudioPlaybackStatusChanged]: (audioPlaybackPermitted: boolean) => void;
+  [AgentSessionEvent.Connected]: () => void;
   [AgentSessionEvent.Disconnected]: () => void;
   [AgentSessionEvent.MediaDevicesError]: (error: Error) => void;
 };
@@ -414,8 +416,10 @@ export type AgentSessionInstance = {
   connectionState: AgentConnectionState;
   isConnected: boolean;
 
-  waitUntilRoomConnected: (signal?: AbortSignal) => void;
-  waitUntilRoomDisconnected: (signal?: AbortSignal) => void;
+  /** Returns a promise that resolves once the room connects. */
+  waitUntilConnected: (signal?: AbortSignal) => void;
+  /** Returns a promise that resolves once the room disconnects */
+  waitUntilDisconnected: (signal?: AbortSignal) => void;
 
   agentConnectTimeout: {
     delayInMilliseconds: number;
@@ -510,6 +514,8 @@ export function createAgentSession(
         },
       };
     });
+
+    emitter.emit(AgentSessionEvent.Connected);
   };
   room.on(RoomEvent.Connected, handleRoomConnected);
 
@@ -573,7 +579,7 @@ export function createAgentSession(
       },
     }));
 
-    await waitUntilRoomDisconnected(waitForDisconnectSignal);
+    await waitUntilDisconnected(waitForDisconnectSignal);
 
     const state = get();
     await Promise.all([
@@ -587,7 +593,7 @@ export function createAgentSession(
       ) : Promise.resolve(),
     ]);
 
-    await waitUntilRoomConnected();
+    await waitUntilConnected();
     await get().agent!.waitUntilAvailable();
   };
   const disconnect = async () => {
@@ -637,30 +643,34 @@ export function createAgentSession(
     }, agentConnectTimeoutMilliseconds ?? DEFAULT_AGENT_CONNECT_TIMEOUT_MILLISECONDS);
   };
 
-  const waitUntilRoomConnected = async (signal?: AbortSignal) => {
-    return waitUntilRoomState(
+  const waitUntilConnected = async (signal?: AbortSignal) => {
+    return waitUntilConnectionState(
       ConnectionState.Connected, /* FIXME: should I check for other states too? */
-      RoomEvent.Connected,
+      AgentSessionEvent.Connected,
       signal,
     );
   };
 
-  const waitUntilRoomDisconnected = async (signal?: AbortSignal) => {
-    return waitUntilRoomState(
+  const waitUntilDisconnected = async (signal?: AbortSignal) => {
+    return waitUntilConnectionState(
       ConnectionState.Disconnected,
-      RoomEvent.Disconnected,
+      AgentSessionEvent.Disconnected,
       signal,
     );
   };
 
-  const waitUntilRoomState = async (state: ConnectionState, stateMonitoringEvent: RoomEvent, signal?: AbortSignal) => {
-    const room = get().subtle.room;
-    if (room.state === state) {
+  const waitUntilConnectionState = async (
+    state: ConnectionState,
+    stateMonitoringEvent: keyof AgentSessionCallbacks,
+    signal?: AbortSignal,
+  ) => {
+    const { connectionState } = get();
+    if (connectionState === state) {
       return;
     }
 
     return new Promise<void>((resolve, reject) => {
-      const onceRoomEventOccurred = () => {
+      const onceEventOccurred = () => {
         cleanup();
         resolve();
       };
@@ -670,11 +680,11 @@ export function createAgentSession(
       };
 
       const cleanup = () => {
-        room.off(stateMonitoringEvent, onceRoomEventOccurred);
+        emitter.off(stateMonitoringEvent, onceEventOccurred);
         signal?.removeEventListener('abort', abortHandler);
       };
 
-      room.on(stateMonitoringEvent, onceRoomEventOccurred);
+      emitter.on(stateMonitoringEvent, onceEventOccurred);
       signal?.addEventListener('abort', abortHandler);
     });
   };
@@ -724,8 +734,8 @@ export function createAgentSession(
     connectionState: 'disconnected',
     ...generateDerivedConnectionStateValues('disconnected'),
 
-    waitUntilRoomConnected,
-    waitUntilRoomDisconnected,
+    waitUntilConnected,
+    waitUntilDisconnected,
 
     agentConnectTimeout: null,
 
