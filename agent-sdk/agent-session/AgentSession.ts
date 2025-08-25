@@ -20,6 +20,7 @@ import {
 import Agent, { AgentConnectionState, AgentConversationalState, AgentEvent, AgentInstance, createAgent } from './Agent';
 import { ConnectionCredentialsProvider } from './ConnectionCredentialsProvider';
 import { ParticipantAttributes } from '../lib/participant-attributes';
+import { createMessages, MessagesEvent, MessagesInstance } from './Messages';
 
 export enum AgentSessionEvent {
   AgentConnectionStateChanged = 'agentConnectionStateChanged',
@@ -412,6 +413,7 @@ export type AgentSessionInstance = {
   credentials: ConnectionCredentialsProvider;
 
   agent: AgentInstance | null;
+  messages: MessagesInstance | null;
 
   connectionState: AgentConnectionState;
   isConnected: boolean;
@@ -429,15 +431,10 @@ export type AgentSessionInstance = {
   prepareConnection: () => Promise<void>,
   connect: (options?: AgentSessionOptions) => Promise<void>;
   disconnect: () => Promise<void>;
-  sendMessage: <Message extends SentMessage | string>(
-    message: Message,
-    options: Message extends SentMessage ? SentMessageOptions<Message> : SentChatMessageOptions,
-  ) => Promise<void>,
 
   subtle: {
+    emitter: TypedEventEmitter<AgentSessionCallbacks>;
     room: Room;
-    messageSender: MessageSender | null;
-    messageReceiver: MessageReceiver | null;
   };
 }
 
@@ -454,6 +451,7 @@ export function createAgentSession(
 ): AgentSessionInstance {
   const room = new Room();
 
+  // FIXME: is this event worth it? It's just proxying an event from the messages layer.
   const handleIncomingMessage = (incomingMessage: ReceivedMessage) => {
     emitter.emit(AgentSessionEvent.MessageReceived, incomingMessage);
   };
@@ -462,7 +460,8 @@ export function createAgentSession(
     updateConnectionState();
   };
 
-  const handleRoomConnected = () => {
+
+  const handleRoomConnected = async () => {
     console.log('!! CONNECTED');
 
     const agentEmitter = new EventEmitter(); // FIXME: can I get rid of this?
@@ -479,26 +478,16 @@ export function createAgentSession(
     agent.initialize();
     updateConnectionState();
 
-    const chatMessageSender = new ChatMessageSender(room.localParticipant);
-    const messageSender = new CombinedMessageSender(
-      chatMessageSender,
-      // TODO: other types of messages that can be sent
+    const messagesEmitter = new EventEmitter(); // FIXME: can I get rid of this?
+    const messages = createMessages(
+      room,
+      () => get().messages!, // FIXME: handle null case better
+      (fn) => set((old) => ({ ...old, messages: fn(old.messages!) })),
+      messagesEmitter as any,
     );
-    set((old) => ({ ...old, subtle: { ...old.subtle, messageSender } }));
-
-    const messageReceiver = new CombinedMessageReceiver(
-      new TranscriptionMessageReceiver(room),
-      chatMessageSender.generateLoopbackMessageReceiver(),
-      // TODO: images? attachments? rpc?
-    );
-    set((old) => ({ ...old, subtle: { ...old.subtle, messageReceiver } }));
-    (async () => {
-      // FIXME: is this sort of pattern a better idea than just making MessageReceiver an EventEmitter?
-      // FIXME: this probably doesn't handle errors properly right now
-      for await (const message of messageReceiver.messages()) {
-        handleIncomingMessage(message);
-      }
-    })();
+    messages.subtle.emitter.on(MessagesEvent.MessageReceived, handleIncomingMessage);
+    set((old) => ({ ...old, messages }));
+    messages.initialize();
 
     set((old) => {
       if (!old.agentConnectTimeout) {
@@ -527,8 +516,9 @@ export function createAgentSession(
     get().agent?.subtle.emitter.off(AgentEvent.AgentAttributesChanged, handleAgentAttributesChanged);
     set((old) => ({ ...old, agent: null }));
 
-    get().subtle.messageReceiver?.close();
-    set((old) => ({ ...old, subtle: { ...old.subtle, messageReceiver: null } }));
+    get().messages?.teardown();
+    get().messages?.subtle.emitter.off(MessagesEvent.MessageReceived, handleIncomingMessage);
+    set((old) => ({ ...old, messages: null }));
 
     set((old) => {
       if (old.agentConnectTimeout?.timeoutId) {
@@ -556,13 +546,6 @@ export function createAgentSession(
   };
   room.on(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
 
-  // const handleAgentConnectionStateChanged = async (newConnectionState: AgentConnectionState) => {
-  //   emitter.emit(AgentSessionEvent.AgentConnectionStateChanged, newConnectionState);
-  // };
-
-  // const handleAgentConversationalStateChanged = async (newConversationalState: AgentConversationalState) => {
-  //   emitter.emit(AgentSessionEvent.AgentConversationalStateChanged, newConversationalState);
-  // };
 
   const connect = async (connectOptions: AgentSessionOptions = {}) => {
     const {
@@ -608,24 +591,6 @@ export function createAgentSession(
     // FIXME: figure out a better logging solution?
     console.warn('WARNING: Room.prepareConnection failed:', err);
   });
-
-  const sendMessage = async <Message extends SentMessage | string>(
-    message: Message,
-    options: Message extends SentMessage ? SentMessageOptions<Message> : SentChatMessageOptions,
-  ) => {
-    const messageSender = get().subtle.messageSender;
-    if (!messageSender) {
-      throw new Error('AgentSession.sendMessage - cannot send message until room is connected and MessageSender initialized!');
-    }
-
-    const constructedMessage: SentMessage = typeof message === 'string' ? {
-      id: `${Math.random()}`, /* FIXME: fix id generation */
-      direction: 'outbound',
-      timestamp: new Date(),
-      content: { type: 'chat', text: message },
-    } : message;
-    await messageSender.send(constructedMessage, options);
-  };
 
   const startAgentConnectedTimeout = (agentConnectTimeoutMilliseconds: AgentSessionOptions["agentConnectTimeoutMilliseconds"] | null) => {
     return setTimeout(() => {
@@ -730,6 +695,7 @@ export function createAgentSession(
     credentials: options.credentials,
 
     agent: null,
+    messages: null,
 
     connectionState: 'disconnected',
     ...generateDerivedConnectionStateValues('disconnected'),
@@ -742,12 +708,10 @@ export function createAgentSession(
     prepareConnection,
     connect,
     disconnect,
-    sendMessage,
 
     subtle: {
+      emitter,
       room,
-      messageSender: null,
-      messageReceiver: null,
     },
   };
 }
