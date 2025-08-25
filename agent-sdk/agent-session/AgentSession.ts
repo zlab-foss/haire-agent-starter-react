@@ -387,4 +387,335 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
     // This probably needs to contain much of the logic in RoomAudioRenderer?
     // And then make a similar type of component that then uses this function internally?
   }
+
+  get subtle(): { readonly room: Room } {
+    return { room: this.room };
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+export type AgentSessionInstance = {
+  [Symbol.toStringTag]: string;
+
+  credentials: ConnectionCredentialsProvider;
+
+  connectionState: AgentConnectionState;
+  conversationalState: AgentConversationalState;
+  isAvailable: boolean;
+
+  agentConnectTimeout: {
+    delayInMilliseconds: number;
+    timeoutId: NodeJS.Timeout | null;
+  } | null,
+
+  prepareConnection: () => Promise<void>,
+  connect: (options?: AgentSessionOptions) => Promise<void>;
+  disconnect: () => Promise<void>;
+  sendMessage: <Message extends SentMessage | string>(
+    message: Message,
+    options: Message extends SentMessage ? SentMessageOptions<Message> : SentChatMessageOptions,
+  ) => Promise<void>,
+
+  subtle: {
+    room: Room;
+    agent: Agent | null;
+    messageSender: MessageSender | null;
+    messageReceiver: MessageReceiver | null;
+  };
+}
+
+
+ /**
+   * AgentSession represents a connection to a LiveKit Agent, providing abstractions to make 1:1
+   * agent/participant rooms easier to work with.
+   */
+export function createAgentSession(
+  options: { credentials: ConnectionCredentialsProvider },
+  get: () => AgentSessionInstance,
+  set: (fn: (old: AgentSessionInstance) => AgentSessionInstance) => void,
+  emitter: TypedEventEmitter<AgentSessionCallbacks>,
+): AgentSessionInstance {
+  const room = new Room();
+
+  const handleIncomingMessage = (incomingMessage: ReceivedMessage) => {
+    emitter.emit(AgentSessionEvent.MessageReceived, incomingMessage);
+  };
+
+  const handleRoomConnected = () => {
+    console.log('!! CONNECTED');
+
+    const agent = new Agent(room);
+    // agent.on(AgentEvent.AgentConnectionStateChanged, this.handleAgentConnectionStateChanged);
+    // agent.on(AgentEvent.AgentConversationalStateChanged, this.handleAgentConversationalStateChanged);
+
+    const chatMessageSender = new ChatMessageSender(room.localParticipant);
+    const messageSender = new CombinedMessageSender(
+      chatMessageSender,
+      // TODO: other types of messages that can be sent
+    );
+
+    const messageReceiver = new CombinedMessageReceiver(
+      new TranscriptionMessageReceiver(room),
+      chatMessageSender.generateLoopbackMessageReceiver(),
+      // TODO: images? attachments? rpc?
+    );
+    (async () => {
+      // FIXME: is this sort of pattern a better idea than just making MessageReceiver an EventEmitter?
+      // FIXME: this probably doesn't handle errors properly right now
+      for await (const message of messageReceiver.messages()) {
+        handleIncomingMessage(message);
+      }
+    })();
+
+    set((old) => {
+      if (!old.agentConnectTimeout) {
+        // (this case shoudln't in practice ever happen)
+        throw new Error('AgentSessionInstance.connect - agentConnectTimeout not set, aborting!');
+      }
+
+      return {
+        ...old,
+        agent,
+        messageSender,
+        messageReceiver,
+        agentConnectTimeout: {
+          delayInMilliseconds: old.agentConnectTimeout.delayInMilliseconds,
+          timeoutId: startAgentConnectedTimeout(old.agentConnectTimeout.delayInMilliseconds),
+        },
+      };
+    });
+  };
+  room.on(RoomEvent.Connected, handleRoomConnected);
+
+  const handleRoomDisconnected = () => {
+    console.log('!! DISCONNECTED');
+    set((old) => {
+      // old.subtle.agent?.off(AgentEvent.AgentConnectionStateChanged, this.handleAgentConnectionStateChanged);
+      // old.subtle.agent?.off(AgentEvent.AgentConversationalStateChanged, this.handleAgentConversationalStateChanged);
+      old.subtle.agent?.teardown();
+      old = { ...old, subtle: { ...old.subtle, agent: null } };
+
+      old.subtle.messageReceiver?.close();
+      old = { ...old, subtle: { ...old.subtle, messageReceiver: null } };
+
+      if (old.agentConnectTimeout?.timeoutId) {
+        clearTimeout(old.agentConnectTimeout?.timeoutId);
+      }
+      old = { ...old, agentConnectTimeout: null };
+
+      emitter.emit(AgentSessionEvent.Disconnected);
+
+      return old;
+    });
+  };
+  room.on(RoomEvent.Disconnected, handleRoomDisconnected);
+
+  const handleAudioPlaybackStatusChanged = async () => {
+    emitter.emit(AgentSessionEvent.AudioPlaybackStatusChanged, get().subtle.room.canPlaybackAudio);
+  };
+  room.on(RoomEvent.AudioPlaybackStatusChanged, handleAudioPlaybackStatusChanged);
+
+  const handleMediaDevicesError = async (error: Error) => {
+    emitter.emit(AgentSessionEvent.MediaDevicesError, error);
+  };
+  room.on(RoomEvent.MediaDevicesError, handleMediaDevicesError);
+
+  // const handleAgentConnectionStateChanged = async (newConnectionState: AgentConnectionState) => {
+  //   emitter.emit(AgentSessionEvent.AgentConnectionStateChanged, newConnectionState);
+  // };
+
+  // const handleAgentConversationalStateChanged = async (newConversationalState: AgentConversationalState) => {
+  //   emitter.emit(AgentSessionEvent.AgentConversationalStateChanged, newConversationalState);
+  // };
+
+  const connect = async (connectOptions: AgentSessionOptions = {}) => {
+    const {
+      waitForDisconnectSignal,
+      agentConnectTimeoutMilliseconds = DEFAULT_AGENT_CONNECT_TIMEOUT_MILLISECONDS,
+      tracks = { microphone: { enabled: true, publishOptions: { preConnectBuffer: true } } },
+    } = connectOptions;
+
+    set((old) => ({
+      ...old,
+      agentConnectTimeout: {
+        delayInMilliseconds: agentConnectTimeoutMilliseconds,
+        timeoutId: null,
+      },
+    }));
+
+    await waitUntilRoomDisconnected(waitForDisconnectSignal);
+
+    const state = get();
+    await Promise.all([
+      options.credentials.generate().then(connection => (
+        state.subtle.room.connect(connection.serverUrl, connection.participantToken)
+      )),
+
+      // Start microphone (with preconnect buffer) by default
+      tracks.microphone?.enabled ? (
+        state.subtle.room.localParticipant.setMicrophoneEnabled(true, undefined, tracks.microphone?.publishOptions ?? {})
+      ) : Promise.resolve(),
+    ]);
+
+    await waitUntilAgentIsAvailable();
+  };
+  const disconnect = async () => {
+    await get().subtle.room.disconnect();
+  };
+
+  const prepareConnection = async () => {
+    const credentials = await options.credentials.generate();
+    await room.prepareConnection(credentials.serverUrl, credentials.participantToken);
+  };
+  prepareConnection().catch(err => {
+    // FIXME: figure out a better logging solution?
+    console.warn('WARNING: Room.prepareConnection failed:', err);
+  });
+
+  const sendMessage = async <Message extends SentMessage | string>(
+    message: Message,
+    options: Message extends SentMessage ? SentMessageOptions<Message> : SentChatMessageOptions,
+  ) => {
+    const messageSender = get().subtle.messageSender;
+    if (!messageSender) {
+      throw new Error('AgentSession.sendMessage - cannot send message until room is connected and MessageSender initialized!');
+    }
+
+    const constructedMessage: SentMessage = typeof message === 'string' ? {
+      id: `${Math.random()}`, /* FIXME: fix id generation */
+      direction: 'outbound',
+      timestamp: new Date(),
+      content: { type: 'chat', text: message },
+    } : message;
+    await messageSender.send(constructedMessage, options);
+  };
+
+  const startAgentConnectedTimeout = (agentConnectTimeoutMilliseconds: AgentSessionOptions["agentConnectTimeoutMilliseconds"] | null) => {
+    return setTimeout(() => {
+      const state = get();
+      if (!state.isAvailable) {
+        const reason =
+          state.connectionState === 'connecting'
+            ? 'Agent did not join the room. '
+            : 'Agent connected but did not complete initializing. ';
+
+        emitter.emit(AgentSessionEvent.AgentConnectionFailure, reason);
+        state.disconnect();
+      }
+    }, agentConnectTimeoutMilliseconds ?? DEFAULT_AGENT_CONNECT_TIMEOUT_MILLISECONDS);
+  };
+
+  /** Returns a promise that resolves once the agent is available for interaction */
+  const waitUntilAgentIsAvailable = async (signal?: AbortSignal) => {
+    return new Promise<void>((resolve, reject) => {
+      const stateChangedHandler = () => {
+        if (!get().isAvailable) {
+          return;
+        }
+        cleanup();
+        resolve();
+      };
+      const abortHandler = () => {
+        cleanup();
+        reject(new Error('AgentSession.waitUntilAgentIsAvailable - signal aborted'));
+      };
+
+      const cleanup = () => {
+        emitter.off(AgentSessionEvent.AgentConnectionStateChanged, stateChangedHandler);
+        emitter.off(AgentSessionEvent.AgentConversationalStateChanged, stateChangedHandler);
+        signal?.removeEventListener('abort', abortHandler);
+      };
+
+      emitter.on(AgentSessionEvent.AgentConnectionStateChanged, stateChangedHandler);
+      emitter.on(AgentSessionEvent.AgentConversationalStateChanged, stateChangedHandler);
+      signal?.addEventListener('abort', abortHandler);
+    });
+  };
+
+  const waitUntilRoomConnected = async (signal?: AbortSignal) => {
+    return waitUntilRoomState(
+      ConnectionState.Connected, /* FIXME: should I check for other states too? */
+      RoomEvent.Connected,
+      signal,
+    );
+  };
+
+  const waitUntilRoomDisconnected = async (signal?: AbortSignal) => {
+    return waitUntilRoomState(
+      ConnectionState.Disconnected,
+      RoomEvent.Disconnected,
+      signal,
+    );
+  };
+
+  const waitUntilRoomState = async (state: ConnectionState, stateMonitoringEvent: RoomEvent, signal?: AbortSignal) => {
+    const room = get().subtle.room;
+    if (room.state === state) {
+      return;
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      const onceRoomEventOccurred = () => {
+        cleanup();
+        resolve();
+      };
+      const abortHandler = () => {
+        cleanup();
+        reject(new Error(`AgentSession.waitUntilRoomState(${state}, ...) - signal aborted`));
+      };
+
+      const cleanup = () => {
+        room.off(stateMonitoringEvent, onceRoomEventOccurred);
+        signal?.removeEventListener('abort', abortHandler);
+      };
+
+      room.on(stateMonitoringEvent, onceRoomEventOccurred);
+      signal?.addEventListener('abort', abortHandler);
+    });
+  };
+
+  return {
+    [Symbol.toStringTag]: "AgentSessionInstance",
+
+    credentials: options.credentials,
+
+    get connectionState() {
+      return get().subtle.agent?.connectionState ?? 'disconnected';
+    },
+    get conversationalState() {
+      return get().subtle.agent?.conversationalState ?? 'disconnected';
+    },
+
+    /** Is the agent ready for user interaction? */
+    get isAvailable() {
+      return (
+        get().conversationalState === 'listening' ||
+        get().conversationalState === 'thinking' ||
+        get().conversationalState === 'speaking'
+      );
+    },
+
+    agentConnectTimeout: null,
+
+    prepareConnection,
+    connect,
+    disconnect,
+    sendMessage,
+
+    subtle: {
+      room,
+      agent: null,
+      messageSender: null,
+      messageReceiver: null,
+    },
+  };
 }

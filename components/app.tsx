@@ -10,7 +10,11 @@ import { Toaster } from '@/components/ui/sonner';
 import { Welcome } from '@/components/welcome';
 import useConnectionDetails from '@/hooks/useConnectionDetails';
 import type { AppConfig } from '@/lib/types';
-import { AgentSession, AgentSessionProvider } from '@/agent-sdk';
+import { AgentSession, AgentSessionEvent, AgentSessionProvider, useAgentEvent } from '@/agent-sdk';
+import { create } from 'zustand';
+import { AgentSessionInstance, createAgentSession } from '@/agent-sdk/agent-session/AgentSession';
+import { ManualConnectionCredentialsProvider } from '@/agent-sdk/agent-session/ConnectionCredentialsProvider';
+import { EventEmitter } from "events";
 
 const MotionWelcome = motion.create(Welcome);
 const MotionSessionView = motion.create(SessionView);
@@ -19,10 +23,36 @@ interface AppProps {
   appConfig: AppConfig;
 }
 
+const emitter = new EventEmitter();
+const useAgentSession = create<AgentSessionInstance>((set, get) => {
+  return createAgentSession({
+    credentials: new ManualConnectionCredentialsProvider(async () => {
+      const url = new URL(
+        process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? '/api/connection-details',
+        window.location.origin
+      );
+
+      let data;
+      try {
+        const res = await fetch(url.toString());
+        data = await res.json();
+      } catch (error) {
+        console.error('Error fetching connection details:', error);
+        throw new Error('Error fetching connection details!');
+      }
+
+      return data;
+    }),
+  }, get, set, emitter as any);
+});
+
 export function App({ appConfig }: AppProps) {
   const { connectionDetailsProvider } = useConnectionDetails();
   const agentSession = useMemo(() => new AgentSession(connectionDetailsProvider), [connectionDetailsProvider]);
   const [sessionStarted, setSessionStarted] = useState(false);
+
+  const foo = useAgentSession();
+  (window as any).foo = foo;
 
   useEffect(() => {
     const onDisconnected = () => {
