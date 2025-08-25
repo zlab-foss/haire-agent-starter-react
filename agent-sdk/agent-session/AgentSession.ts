@@ -19,6 +19,7 @@ import {
 } from "./message";
 import Agent, { AgentConnectionState, AgentConversationalState, AgentEvent, AgentInstance, createAgent } from './Agent';
 import { ConnectionCredentialsProvider } from './ConnectionCredentialsProvider';
+import { ParticipantAttributes } from '../lib/participant-attributes';
 
 export enum AgentSessionEvent {
   AgentConnectionStateChanged = 'agentConnectionStateChanged',
@@ -451,6 +452,10 @@ export function createAgentSession(
     emitter.emit(AgentSessionEvent.MessageReceived, incomingMessage);
   };
 
+  const handleAgentAttributesChanged = () => {
+    updateConnectionState();
+  };
+
   const handleRoomConnected = () => {
     console.log('!! CONNECTED');
 
@@ -461,10 +466,12 @@ export function createAgentSession(
       (fn) => set((old) => ({ ...old, agent: fn(old.agent!) })),
       agentEmitter as any,
     );
+    agent.subtle.emitter.on(AgentEvent.AgentAttributesChanged, handleAgentAttributesChanged);
     // agent.on(AgentEvent.AgentConnectionStateChanged, this.handleAgentConnectionStateChanged);
     // agent.on(AgentEvent.AgentConversationalStateChanged, this.handleAgentConversationalStateChanged);
     set((old) => ({ ...old, agent }));
     agent.initalize();
+    updateConnectionState();
 
     const chatMessageSender = new ChatMessageSender(room.localParticipant);
     const messageSender = new CombinedMessageSender(
@@ -509,6 +516,7 @@ export function createAgentSession(
     // old.subtle.agent?.off(AgentEvent.AgentConnectionStateChanged, this.handleAgentConnectionStateChanged);
     // old.subtle.agent?.off(AgentEvent.AgentConversationalStateChanged, this.handleAgentConversationalStateChanged);
     get().agent?.teardown();
+    get().agent?.subtle.emitter.off(AgentEvent.AgentAttributesChanged, handleAgentAttributesChanged);
     set((old) => ({ ...old, agent: null }));
 
     get().subtle.messageReceiver?.close();
@@ -534,6 +542,11 @@ export function createAgentSession(
     emitter.emit(AgentSessionEvent.MediaDevicesError, error);
   };
   room.on(RoomEvent.MediaDevicesError, handleMediaDevicesError);
+
+  const handleConnectionStateChanged = () => {
+    updateConnectionState();
+  };
+  room.on(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
 
   // const handleAgentConnectionStateChanged = async (newConnectionState: AgentConnectionState) => {
   //   emitter.emit(AgentSessionEvent.AgentConnectionStateChanged, newConnectionState);
@@ -689,6 +702,41 @@ export function createAgentSession(
     });
   };
 
+  const updateConnectionState = () => {
+    let newConnectionState: AgentConnectionState;
+    const { connectionState, agent } = get();
+
+    const roomConnectionState = room.state;
+    if (roomConnectionState === ConnectionState.Disconnected) {
+      newConnectionState = 'disconnected';
+    } else if (
+      roomConnectionState === ConnectionState.Connecting ||
+      !agent?.subtle.agentParticipant ||
+      !agent?.attributes[ParticipantAttributes.state]
+    ) {
+      newConnectionState = 'connecting';
+    } else {
+      newConnectionState = roomConnectionState;
+    }
+    console.log('!! CONNECTION STATE:', newConnectionState);
+
+    if (connectionState !== newConnectionState) {
+      set((old) => ({
+        ...old,
+        connectionState: newConnectionState,
+        ...generateDerivedConnectionStateValues(newConnectionState),
+      }));
+      emitter.emit(AgentSessionEvent.AgentConnectionStateChanged, newConnectionState);
+    }
+  };
+  const generateDerivedConnectionStateValues = (conversationalState: AgentSessionInstance["connectionState"]) => ({
+    isConnected: (
+      conversationalState === 'connected' ||
+      conversationalState === 'reconnecting' ||
+      conversationalState === 'signalReconnecting'
+    ),
+  });
+
   return {
     [Symbol.toStringTag]: "AgentSessionInstance",
 
@@ -696,12 +744,7 @@ export function createAgentSession(
 
     agent: null,
 
-    get connectionState() {
-      return get().agent?.connectionState ?? 'disconnected';
-    },
-    get conversationalState() {
-      return get().agent?.conversationalState ?? 'disconnected';
-    },
+    connectionState: 'disconnected',
 
     /** Is the agent ready for user interaction? */
     get isAvailable() {

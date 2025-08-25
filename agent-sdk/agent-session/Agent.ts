@@ -236,7 +236,9 @@ export default class Agent extends (EventEmitter as new () => TypedEventEmitter<
 export type AgentInstance = {
   [Symbol.toStringTag]: "AgentInstance";
 
-  connectionState: AgentConnectionState;
+  initalize: () => void;
+  teardown: () => void;
+
   conversationalState: AgentConversationalState;
 
   // FIXME: consider dropping TrackReference?
@@ -246,10 +248,8 @@ export type AgentInstance = {
   // FIXME: maybe add some sort of schema to this?
   attributes: Record<string, string>;
 
-  initalize: () => void;
-  teardown: () => void;
-
   subtle: {
+    emitter: TypedEventEmitter<AgentCallbacks>;
     agentParticipant: RemoteParticipant | null;
     workerParticipant: RemoteParticipant | null;
   };
@@ -272,7 +272,6 @@ export function createAgent(
   room.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
 
   const handleConnectionStateChanged = () => {
-    updateConnectionState();
     updateConversationalState();
   };
   room.on(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
@@ -283,7 +282,6 @@ export function createAgent(
   room.localParticipant.on(ParticipantEvent.TrackPublished, handleLocalParticipantTrackPublished)
 
   const initalize = () => {
-    updateConnectionState();
     updateConversationalState();
   };
 
@@ -298,7 +296,6 @@ export function createAgent(
     set((old) => ({ ...old, attributes }));
     emitter.emit(AgentEvent.AgentAttributesChanged, attributes);
 
-    updateConnectionState();
     updateConversationalState();
   };
 
@@ -387,30 +384,6 @@ export function createAgent(
     }
   };
 
-  const updateConnectionState = () => {
-    let newConnectionState: AgentConnectionState;
-    const { connectionState, attributes, subtle: { agentParticipant } } = get();
-
-    const roomConnectionState = room.state;
-    if (roomConnectionState === ConnectionState.Disconnected) {
-      newConnectionState = 'disconnected';
-    } else if (
-      roomConnectionState === ConnectionState.Connecting ||
-      !agentParticipant ||
-      !attributes[ParticipantAttributes.state]
-    ) {
-      newConnectionState = 'connecting';
-    } else {
-      newConnectionState = roomConnectionState;
-    }
-    console.log('!! CONNECTION STATE:', newConnectionState);
-
-    if (connectionState !== newConnectionState) {
-      set((old) => ({ ...old, connectionState: newConnectionState }));
-      emitter.emit(AgentEvent.AgentConnectionStateChanged, newConnectionState);
-    }
-  };
-
   const updateConversationalState = () => {
     let newConversationalState: AgentConversationalState = 'disconnected';
     const { conversationalState, attributes, subtle: { agentParticipant } } = get();
@@ -443,7 +416,9 @@ export function createAgent(
   return {
     [Symbol.toStringTag]: "AgentInstance",
 
-    connectionState: 'disconnected',
+    initalize,
+    teardown,
+
     conversationalState: 'disconnected',
 
     audioTrack: null,
@@ -451,10 +426,8 @@ export function createAgent(
 
     attributes: {},
 
-    initalize,
-    teardown,
-
     subtle: {
+      emitter,
       agentParticipant: null,
       workerParticipant: null,
     },
