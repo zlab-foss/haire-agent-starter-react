@@ -1,5 +1,6 @@
 import { Track } from 'livekit-client';
 import { useLocalParticipantPermissions } from '@livekit/components-react';
+import { useAgentLocalParticipant, useAgentLocalParticipantPermissions } from '@/agent-sdk';
 
 const trackSourceToProtocol = (source: Track.Source) => {
   // NOTE: this mapping avoids importing the protocol package as that leads to a significant bundle size increase
@@ -23,7 +24,8 @@ export interface PublishPermissions {
 }
 
 export function usePublishPermissions(): PublishPermissions {
-  const localPermissions = useLocalParticipantPermissions();
+  // const localPermissions = useLocalParticipantPermissions();
+  const localPermissions = useAgentLocalParticipantPermissions();
 
   const canPublishSource = (source: Track.Source) => {
     return (

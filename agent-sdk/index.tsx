@@ -521,6 +521,23 @@ export function useAgentMediaDeviceSelect({ kind, requestPermissions, onError }:
   return { devices, activeDeviceId: currentDeviceId, setActiveMediaDevice };
 }
 
+export function useAgentLocalParticipantPermissions() {
+  const agentSession = useAgentSession();
+
+  const [permissions, setPermissions] = useState(agentSession.localParticipant.permissions);
+  useEffect(() => {
+    agentSession.localParticipant.on(ParticipantEvent.ParticipantPermissionsChanged, setPermissions);
+    return () => {
+      agentSession.localParticipant.off(
+        ParticipantEvent.ParticipantPermissionsChanged,
+        setPermissions
+      );
+    };
+  }, [agentSession.localParticipant]);
+
+  return permissions;
+}
+
 // hook ideas:
 // useAgentTracks? (video)
 // useAgentControls? (control bar stuff)
