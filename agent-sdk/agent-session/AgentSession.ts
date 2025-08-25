@@ -21,6 +21,7 @@ import Agent, { AgentConnectionState, AgentConversationalState, AgentEvent, Agen
 import { ConnectionCredentialsProvider } from './ConnectionCredentialsProvider';
 import { ParticipantAttributes } from '../lib/participant-attributes';
 import { createMessages, MessagesEvent, MessagesInstance } from './Messages';
+import { createLocal, LocalInstance } from './Local';
 
 export enum AgentSessionEvent {
   AgentConnectionStateChanged = 'agentConnectionStateChanged',
@@ -413,6 +414,7 @@ export type AgentSessionInstance = {
   credentials: ConnectionCredentialsProvider;
 
   agent: AgentInstance | null;
+  local: LocalInstance | null;
   messages: MessagesInstance | null;
 
   connectionState: AgentConnectionState;
@@ -478,6 +480,16 @@ export function createAgentSession(
     agent.initialize();
     updateConnectionState();
 
+    const localEmitter = new EventEmitter(); // FIXME: can I get rid of this?
+    const local = createLocal(
+      room,
+      () => get().local!, // FIXME: handle null case better
+      (fn) => set((old) => ({ ...old, local: fn(old.local!) })),
+      localEmitter as any,
+    );
+    set((old) => ({ ...old, local }));
+    local.initialize();
+
     const messagesEmitter = new EventEmitter(); // FIXME: can I get rid of this?
     const messages = createMessages(
       room,
@@ -515,6 +527,9 @@ export function createAgentSession(
     get().agent?.teardown();
     get().agent?.subtle.emitter.off(AgentEvent.AgentAttributesChanged, handleAgentAttributesChanged);
     set((old) => ({ ...old, agent: null }));
+
+    get().local?.teardown();
+    set((old) => ({ ...old, local: null }));
 
     get().messages?.teardown();
     get().messages?.subtle.emitter.off(MessagesEvent.MessageReceived, handleIncomingMessage);
@@ -695,6 +710,7 @@ export function createAgentSession(
     credentials: options.credentials,
 
     agent: null,
+    local: null,
     messages: null,
 
     connectionState: 'disconnected',
