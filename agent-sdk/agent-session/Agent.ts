@@ -226,3 +226,237 @@ export default class Agent extends (EventEmitter as new () => TypedEventEmitter<
     );
   }
 }
+
+
+
+
+
+
+
+export type AgentInstance = {
+  [Symbol.toStringTag]: "AgentInstance";
+
+  connectionState: AgentConnectionState;
+  conversationalState: AgentConversationalState;
+
+  // FIXME: consider dropping TrackReference?
+  audioTrack: TrackReference | null;
+  videoTrack: TrackReference | null;
+
+  // FIXME: maybe add some sort of schema to this?
+  attributes: Record<string, string>;
+
+  initalize: () => void;
+  teardown: () => void;
+
+  subtle: {
+    agentParticipant: RemoteParticipant | null;
+    workerParticipant: RemoteParticipant | null;
+  };
+};
+
+export function createAgent(
+  room: Room,
+  get: () => AgentInstance,
+  set: (fn: (old: AgentInstance) => AgentInstance) => void,
+  emitter: TypedEventEmitter<AgentCallbacks>,
+): AgentInstance {
+  const handleParticipantConnected = () => {
+    updateParticipants();
+  };
+  room.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
+
+  const handleParticipantDisconnected = () => {
+    updateParticipants();
+  };
+  room.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
+
+  const handleConnectionStateChanged = () => {
+    updateConnectionState();
+    updateConversationalState();
+  };
+  room.on(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
+
+  const handleLocalParticipantTrackPublished = () => {
+    updateConversationalState();
+  };
+  room.localParticipant.on(ParticipantEvent.TrackPublished, handleLocalParticipantTrackPublished)
+
+  const initalize = () => {
+    updateConnectionState();
+    updateConversationalState();
+  };
+
+  const teardown = () => {
+    room.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
+    room.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
+    room.off(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
+    room.localParticipant.off(ParticipantEvent.TrackPublished, handleLocalParticipantTrackPublished)
+  };
+
+  const handleAttributesChanged = (attributes: Record<string, string>) => {
+    set((old) => ({ ...old, attributes }));
+    emitter.emit(AgentEvent.AgentAttributesChanged, attributes);
+
+    updateConnectionState();
+    updateConversationalState();
+  };
+
+  const handleUpdateTracks = () => {
+    const {
+      videoTrack: oldVideoTrack,
+      audioTrack: oldAudioTrack,
+      subtle: { agentParticipant, workerParticipant }
+    } = get();
+
+    const agentTracks = agentParticipant ? getParticipantTrackRefs(
+      agentParticipant,
+      { sources: [Track.Source.Microphone, Track.Source.Camera] }
+    ) : [];
+    const workerTracks = workerParticipant ? getParticipantTrackRefs(
+      workerParticipant,
+      { sources: [Track.Source.Microphone, Track.Source.Camera] }
+    ) : [];
+
+    const newVideoTrack = (
+      agentTracks.find((t) => t.source === Track.Source.Camera) ??
+      workerTracks.find((t) => t.source === Track.Source.Camera) ?? null
+    );
+    if (oldVideoTrack !== newVideoTrack) {
+      set((old) => ({ ...old, videoTrack: newVideoTrack }));
+      emitter.emit(AgentEvent.VideoTrackChanged, newVideoTrack);
+    }
+
+    const newAudioTrack = (
+      agentTracks.find((t) => t.source === Track.Source.Microphone) ??
+      workerTracks.find((t) => t.source === Track.Source.Microphone) ?? null
+    );
+    if (oldAudioTrack !== newAudioTrack) {
+      set((old) => ({ ...old, audioTrack: newAudioTrack }));
+      emitter.emit(AgentEvent.AudioTrackChanged, newAudioTrack);
+    }
+  };
+
+  const updateParticipants = () => {
+    const {
+      agentParticipant: oldAgentParticipant,
+      workerParticipant: oldWorkerParticipant,
+    } = get().subtle;
+
+    const roomRemoteParticipants = Array.from(room.remoteParticipants.values());
+    const newAgentParticipant = roomRemoteParticipants.find(
+      (p) => p.kind === ParticipantKind.AGENT && !(ParticipantAttributes.publishOnBehalf in p.attributes),
+    ) ?? null;
+    const newWorkerParticipant = newAgentParticipant ? (
+      roomRemoteParticipants.find(
+        (p) =>
+          p.kind === ParticipantKind.AGENT && p.attributes[ParticipantAttributes.publishOnBehalf] === newAgentParticipant.identity,
+      ) ?? null
+    ) : null;
+
+    // 1. Listen for attribute changes
+    if (oldAgentParticipant !== newAgentParticipant) {
+      oldAgentParticipant?.off(ParticipantEvent.AttributesChanged, handleAttributesChanged);
+
+      if (newAgentParticipant) {
+        newAgentParticipant.on(ParticipantEvent.AttributesChanged, handleAttributesChanged);
+        handleAttributesChanged(newAgentParticipant.attributes);
+      }
+    }
+
+    // 2. Listen for track updates
+    if (oldAgentParticipant !== newAgentParticipant) {
+      set((old) => ({ ...old, subtle: { ...old.subtle, agentParticipant: newAgentParticipant } }));
+      for (const event of participantTrackEvents) {
+        oldAgentParticipant?.off(event as keyof ParticipantEventCallbacks, handleUpdateTracks);
+        if (newAgentParticipant) {
+          newAgentParticipant.on(event as keyof ParticipantEventCallbacks, handleUpdateTracks);
+          handleUpdateTracks();
+        }
+      }
+    }
+    if (oldWorkerParticipant !== newWorkerParticipant) {
+      set((old) => ({ ...old, subtle: { ...old.subtle, workerParticipant: newWorkerParticipant } }));
+      for (const event of participantTrackEvents) {
+        oldWorkerParticipant?.off(event as keyof ParticipantEventCallbacks, handleUpdateTracks);
+        if (newWorkerParticipant) {
+          newWorkerParticipant.on(event as keyof ParticipantEventCallbacks, handleUpdateTracks);
+          handleUpdateTracks();
+        }
+      }
+    }
+  };
+
+  const updateConnectionState = () => {
+    let newConnectionState: AgentConnectionState;
+    const { connectionState, attributes, subtle: { agentParticipant } } = get();
+
+    const roomConnectionState = room.state;
+    if (roomConnectionState === ConnectionState.Disconnected) {
+      newConnectionState = 'disconnected';
+    } else if (
+      roomConnectionState === ConnectionState.Connecting ||
+      !agentParticipant ||
+      !attributes[ParticipantAttributes.state]
+    ) {
+      newConnectionState = 'connecting';
+    } else {
+      newConnectionState = roomConnectionState;
+    }
+    console.log('!! CONNECTION STATE:', newConnectionState);
+
+    if (connectionState !== newConnectionState) {
+      set((old) => ({ ...old, connectionState: newConnectionState }));
+      emitter.emit(AgentEvent.AgentConnectionStateChanged, newConnectionState);
+    }
+  };
+
+  const updateConversationalState = () => {
+    let newConversationalState: AgentConversationalState = 'disconnected';
+    const { conversationalState, attributes, subtle: { agentParticipant } } = get();
+
+    if (room.state !== ConnectionState.Disconnected) {
+      newConversationalState = 'initializing';
+    }
+
+    // If the microphone preconnect buffer is active, then the state should be "listening" rather
+    // than "initializing"
+    const micTrack = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+    if (micTrack) {
+      newConversationalState = 'listening';
+    }
+
+    if (agentParticipant && attributes[ParticipantAttributes.state]) {
+      // ref: https://github.com/livekit/agents/blob/65170238db197f62f479eb7aaef1c0e18bfad6e7/livekit-agents/livekit/agents/voice/events.py#L97
+      const agentState = attributes[ParticipantAttributes.state] as 'initializing' | 'idle' | 'listening' | 'thinking' | 'speaking';
+      newConversationalState = agentState;
+    }
+
+    console.log('!! CONVERSATIONAL STATE:', newConversationalState);
+
+    if (conversationalState !== newConversationalState) {
+      set((old) => ({ ...old, conversationalState: newConversationalState }));
+      emitter.emit(AgentEvent.AgentConversationalStateChanged, newConversationalState);
+    }
+  };
+
+  return {
+    [Symbol.toStringTag]: "AgentInstance",
+
+    connectionState: 'disconnected',
+    conversationalState: 'disconnected',
+
+    audioTrack: null,
+    videoTrack: null,
+
+    attributes: {},
+
+    initalize,
+    teardown,
+
+    subtle: {
+      agentParticipant: null,
+      workerParticipant: null,
+    },
+  };
+}

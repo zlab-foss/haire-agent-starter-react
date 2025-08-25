@@ -17,7 +17,7 @@ import {
   SentMessageOptions,
   SentChatMessageOptions,
 } from "./message";
-import Agent, { AgentConnectionState, AgentConversationalState, AgentEvent } from './Agent';
+import Agent, { AgentConnectionState, AgentConversationalState, AgentEvent, AgentInstance, createAgent } from './Agent';
 import { ConnectionCredentialsProvider } from './ConnectionCredentialsProvider';
 
 export enum AgentSessionEvent {
@@ -404,9 +404,11 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
 
 
 export type AgentSessionInstance = {
-  [Symbol.toStringTag]: string;
+  [Symbol.toStringTag]: "AgentSessionInstance",
 
   credentials: ConnectionCredentialsProvider;
+
+  agent: AgentInstance | null;
 
   connectionState: AgentConnectionState;
   conversationalState: AgentConversationalState;
@@ -427,7 +429,6 @@ export type AgentSessionInstance = {
 
   subtle: {
     room: Room;
-    agent: Agent | null;
     messageSender: MessageSender | null;
     messageReceiver: MessageReceiver | null;
   };
@@ -453,21 +454,31 @@ export function createAgentSession(
   const handleRoomConnected = () => {
     console.log('!! CONNECTED');
 
-    const agent = new Agent(room);
+    const agentEmitter = new EventEmitter(); // FIXME: can I get rid of this?
+    const agent = createAgent(
+      room,
+      () => get().agent!, // FIXME: handle null case better
+      (fn) => set((old) => ({ ...old, agent: fn(old.agent!) })),
+      agentEmitter as any,
+    );
     // agent.on(AgentEvent.AgentConnectionStateChanged, this.handleAgentConnectionStateChanged);
     // agent.on(AgentEvent.AgentConversationalStateChanged, this.handleAgentConversationalStateChanged);
+    set((old) => ({ ...old, agent }));
+    agent.initalize();
 
     const chatMessageSender = new ChatMessageSender(room.localParticipant);
     const messageSender = new CombinedMessageSender(
       chatMessageSender,
       // TODO: other types of messages that can be sent
     );
+    set((old) => ({ ...old, subtle: { ...old.subtle, messageSender } }));
 
     const messageReceiver = new CombinedMessageReceiver(
       new TranscriptionMessageReceiver(room),
       chatMessageSender.generateLoopbackMessageReceiver(),
       // TODO: images? attachments? rpc?
     );
+    set((old) => ({ ...old, subtle: { ...old.subtle, messageReceiver } }));
     (async () => {
       // FIXME: is this sort of pattern a better idea than just making MessageReceiver an EventEmitter?
       // FIXME: this probably doesn't handle errors properly right now
@@ -484,9 +495,6 @@ export function createAgentSession(
 
       return {
         ...old,
-        agent,
-        messageSender,
-        messageReceiver,
         agentConnectTimeout: {
           delayInMilliseconds: old.agentConnectTimeout.delayInMilliseconds,
           timeoutId: startAgentConnectedTimeout(old.agentConnectTimeout.delayInMilliseconds),
@@ -498,24 +506,22 @@ export function createAgentSession(
 
   const handleRoomDisconnected = () => {
     console.log('!! DISCONNECTED');
+    // old.subtle.agent?.off(AgentEvent.AgentConnectionStateChanged, this.handleAgentConnectionStateChanged);
+    // old.subtle.agent?.off(AgentEvent.AgentConversationalStateChanged, this.handleAgentConversationalStateChanged);
+    get().agent?.teardown();
+    set((old) => ({ ...old, agent: null }));
+
+    get().subtle.messageReceiver?.close();
+    set((old) => ({ ...old, subtle: { ...old.subtle, messageReceiver: null } }));
+
     set((old) => {
-      // old.subtle.agent?.off(AgentEvent.AgentConnectionStateChanged, this.handleAgentConnectionStateChanged);
-      // old.subtle.agent?.off(AgentEvent.AgentConversationalStateChanged, this.handleAgentConversationalStateChanged);
-      old.subtle.agent?.teardown();
-      old = { ...old, subtle: { ...old.subtle, agent: null } };
-
-      old.subtle.messageReceiver?.close();
-      old = { ...old, subtle: { ...old.subtle, messageReceiver: null } };
-
       if (old.agentConnectTimeout?.timeoutId) {
         clearTimeout(old.agentConnectTimeout?.timeoutId);
       }
-      old = { ...old, agentConnectTimeout: null };
-
-      emitter.emit(AgentSessionEvent.Disconnected);
-
-      return old;
+      return { ...old, agentConnectTimeout: null };
     });
+
+    emitter.emit(AgentSessionEvent.Disconnected);
   };
   room.on(RoomEvent.Disconnected, handleRoomDisconnected);
 
@@ -688,11 +694,13 @@ export function createAgentSession(
 
     credentials: options.credentials,
 
+    agent: null,
+
     get connectionState() {
-      return get().subtle.agent?.connectionState ?? 'disconnected';
+      return get().agent?.connectionState ?? 'disconnected';
     },
     get conversationalState() {
-      return get().subtle.agent?.conversationalState ?? 'disconnected';
+      return get().agent?.conversationalState ?? 'disconnected';
     },
 
     /** Is the agent ready for user interaction? */
@@ -713,7 +721,6 @@ export function createAgentSession(
 
     subtle: {
       room,
-      agent: null,
       messageSender: null,
       messageReceiver: null,
     },
