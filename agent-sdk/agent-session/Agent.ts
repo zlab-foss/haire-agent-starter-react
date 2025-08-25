@@ -236,7 +236,7 @@ export default class Agent extends (EventEmitter as new () => TypedEventEmitter<
 export type AgentInstance = {
   [Symbol.toStringTag]: "AgentInstance";
 
-  initalize: () => void;
+  initialize: () => void;
   teardown: () => void;
 
   conversationalState: AgentConversationalState;
@@ -287,7 +287,7 @@ export function createAgent(
   };
   room.localParticipant.on(ParticipantEvent.TrackPublished, handleLocalParticipantTrackPublished)
 
-  const initalize = () => {
+  const initialize = () => {
     updateConversationalState();
   };
 
@@ -457,7 +457,7 @@ export function createAgent(
   return {
     [Symbol.toStringTag]: "AgentInstance",
 
-    initalize,
+    initialize,
     teardown,
 
     conversationalState: 'disconnected',

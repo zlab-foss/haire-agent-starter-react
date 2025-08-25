@@ -476,7 +476,7 @@ export function createAgentSession(
     // agent.on(AgentEvent.AgentConnectionStateChanged, this.handleAgentConnectionStateChanged);
     // agent.on(AgentEvent.AgentConversationalStateChanged, this.handleAgentConversationalStateChanged);
     set((old) => ({ ...old, agent }));
-    agent.initalize();
+    agent.initialize();
     updateConnectionState();
 
     const chatMessageSender = new ChatMessageSender(room.localParticipant);
