@@ -59,14 +59,14 @@ export type LocalTrackInstance<TrackSource extends Track.Source> = {
 
   set: (enabled: boolean, captureOptions?: CaptureOptions<TrackSource>, publishOptions?: TrackPublishOptions) => Promise<boolean>;
   toggle: (captureOptions?: CaptureOptions<TrackSource>, publishOptions?: TrackPublishOptions) => Promise<boolean>;
-  devices: {
-    activeId: string | null;
-    changeActive: (deviceId?: string) => void;
+  devices: TrackSource extends Track.Source.Camera | Track.Source.Microphone ? {
+    activeId: string;
+    changeActive: TrackSource extends Track.Source.Camera | Track.Source.Microphone ? (deviceId?: string) => void : undefined;
     list: Array<MediaDeviceInfo>;
     subtle: {
       listDevices: (requestPermissions?: boolean) => Promise<Array<MediaDeviceInfo>>,
     },
-  },
+  } : undefined,
 
   subtle: {
     emitter: TypedEventEmitter<LocalTrackCallbacks<TrackSource>>,
@@ -307,7 +307,12 @@ export function createLocalTrack<TrackSource extends Track.Source>(
       throw err;
     }
 
-    set((old) => ({ ...old, devices: { ...old.devices, list } }));
+    set((old) => {
+      if (!old.devices) {
+        throw new Error(`LocalTrackInstance.handleDeviceChang - Error storing device list for track source ${options.trackSource}`);
+      }
+      return { ...old, devices: { ...old.devices, list } };
+    });
   };
 
   if (mediaDeviceKind !== null && typeof window !== 'undefined') {
@@ -358,14 +363,12 @@ export function createLocalTrack<TrackSource extends Track.Source>(
 
     set: setEnabled,
     toggle: toggleEnabled,
-    devices: {
-      activeId: mediaDeviceKind ? (
-        options.room.getActiveDevice(mediaDeviceKind) ?? 'default'
-      ) : null,
+    devices: mediaDeviceKind ? {
+      activeId: options.room.getActiveDevice(mediaDeviceKind) ?? 'default',
       changeActive: changeActiveDevice,
       list: [],
       subtle: { listDevices },
-    },
+    } : undefined as any, // FIXME: I can't get this type logic to work...
 
     subtle: {
       emitter,
