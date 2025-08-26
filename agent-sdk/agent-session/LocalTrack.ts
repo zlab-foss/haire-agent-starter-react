@@ -6,7 +6,8 @@ import { LocalUserChoices } from '@livekit/components-react';
 import { SwitchActiveDeviceOptions } from './AgentSession';
 import { loadUserChoices, saveUserChoices } from '../external-deps/components-js';
 
-const localParticipantEvents: Array<keyof ParticipantEventCallbacks> = [
+// FIXME: rename this
+export const participantEvents: Array<keyof ParticipantEventCallbacks> = [
   ParticipantEvent.TrackMuted,
   ParticipantEvent.TrackUnmuted,
   ParticipantEvent.ParticipantPermissionsChanged,
@@ -123,12 +124,12 @@ export function createLocalTrack<TrackSource extends Track.Source>(
       },
     }));
   };
-  for (const eventName of localParticipantEvents) {
+  for (const eventName of participantEvents) {
     options.room.localParticipant.on(eventName, handleParticipantEvent);
   }
 
   const teardown = () => {
-    for (const eventName of localParticipantEvents) {
+    for (const eventName of participantEvents) {
       options.room.localParticipant.off(eventName, handleParticipantEvent);
     }
 

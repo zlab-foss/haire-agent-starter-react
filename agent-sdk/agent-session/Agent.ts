@@ -1,9 +1,10 @@
 import type TypedEventEmitter from 'typed-emitter';
 import { EventEmitter } from "events";
-import { ConnectionState, ParticipantEvent, ParticipantKind, RemoteParticipant, Room, RoomEvent, Track } from 'livekit-client';
+import { ConnectionState, ParticipantEvent, ParticipantKind, RemoteParticipant, RemoteTrackPublication, Room, RoomEvent, Track } from 'livekit-client';
 import { getParticipantTrackRefs, participantTrackEvents, TrackReference } from '@/agent-sdk/external-deps/components-js';
 import { ParticipantEventCallbacks } from '@/agent-sdk/external-deps/client-sdk-js';
 import { ParticipantAttributes } from '@/agent-sdk/lib/participant-attributes';
+import { createRemoteTrack, RemoteTrackInstance } from './RemoteTrack';
 
 /** State representing the current connection status to the server hosted agent */
 export type AgentConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'signalReconnecting';
@@ -13,15 +14,15 @@ export type AgentConversationalState = 'disconnected' | 'initializing' | 'idle' 
 
 export enum AgentEvent {
   VideoTrackChanged = 'videoTrackChanged',
-  AudioTrackChanged = 'videoTrackChanged',
+  AudioTrackChanged = 'audioTrackChanged',
   AgentAttributesChanged = 'agentAttributesChanged',
   AgentConnectionStateChanged = 'agentConnectionStateChanged',
   AgentConversationalStateChanged = 'agentConversationalStateChanged',
 }
 
 export type AgentCallbacks = {
-  [AgentEvent.VideoTrackChanged]: (newTrack: TrackReference | null) => void;
-  [AgentEvent.AudioTrackChanged]: (newTrack: TrackReference | null) => void;
+  [AgentEvent.VideoTrackChanged]: (newTrack: RemoteTrackInstance<Track.Source.Camera> | null) => void;
+  [AgentEvent.AudioTrackChanged]: (newTrack: RemoteTrackInstance<Track.Source.Microphone> | null) => void;
   [AgentEvent.AgentAttributesChanged]: (newAttributes: Record<string, string>) => void;
   [AgentEvent.AgentConnectionStateChanged]: (newAgentConnectionState: AgentConnectionState) => void;
   [AgentEvent.AgentConversationalStateChanged]: (newAgentConversationalState: AgentConversationalState) => void;
@@ -131,7 +132,7 @@ export default class Agent extends (EventEmitter as new () => TypedEventEmitter<
     );
     if (this.videoTrack !== newVideoTrack) {
       this.videoTrack = newVideoTrack;
-      this.emit(AgentEvent.VideoTrackChanged, newVideoTrack);
+      this.emit(AgentEvent.VideoTrackChanged, newVideoTrack as any);
     }
 
     const newAudioTrack = (
@@ -140,7 +141,7 @@ export default class Agent extends (EventEmitter as new () => TypedEventEmitter<
     );
     if (this.audioTrack !== newAudioTrack) {
       this.audioTrack = newAudioTrack;
-      this.emit(AgentEvent.AudioTrackChanged, newAudioTrack);
+      this.emit(AgentEvent.AudioTrackChanged, newAudioTrack as any);
     }
   };
 
@@ -247,9 +248,8 @@ export type AgentInstance = {
   /** Returns a promise that resolves once the agent is available for interaction */
   waitUntilAvailable: (signal?: AbortSignal) => Promise<void>;
 
-  // FIXME: consider dropping TrackReference?
-  audioTrack: TrackReference | null;
-  videoTrack: TrackReference | null;
+  camera: RemoteTrackInstance<Track.Source.Camera> | null;
+  microphone: RemoteTrackInstance<Track.Source.Microphone> | null;
 
   // FIXME: maybe add some sort of schema to this?
   attributes: Record<string, string>;
@@ -296,6 +296,10 @@ export function createAgent(
     room.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
     room.off(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
     room.localParticipant.off(ParticipantEvent.TrackPublished, handleLocalParticipantTrackPublished)
+
+    get().camera?.teardown();
+    get().microphone?.teardown();
+    set((old) => ({ ...old, camera: null, microphone: null }));
   };
 
   const waitUntilAvailable = async (signal?: AbortSignal) => {
@@ -331,8 +335,8 @@ export function createAgent(
 
   const handleUpdateTracks = () => {
     const {
-      videoTrack: oldVideoTrack,
-      audioTrack: oldAudioTrack,
+      camera: oldCamera,
+      microphone: oldMicrophone,
       subtle: { agentParticipant, workerParticipant }
     } = get();
 
@@ -349,18 +353,44 @@ export function createAgent(
       agentTracks.find((t) => t.source === Track.Source.Camera) ??
       workerTracks.find((t) => t.source === Track.Source.Camera) ?? null
     );
-    if (oldVideoTrack !== newVideoTrack) {
-      set((old) => ({ ...old, videoTrack: newVideoTrack }));
-      emitter.emit(AgentEvent.VideoTrackChanged, newVideoTrack);
+    if (oldCamera?.subtle.publication !== newVideoTrack?.publication) {
+      const camera = newVideoTrack ? (
+        createRemoteTrack(
+          {
+            publication: newVideoTrack.publication as RemoteTrackPublication,
+            participant: newVideoTrack.participant,
+          },
+          () => get().camera!,
+          (fn: (old: RemoteTrackInstance<Track.Source.Camera>) => RemoteTrackInstance<Track.Source.Camera>) => {
+            return set((old) => ({ ...old, camera: fn(old.camera!) }));
+          },
+        )
+      ) : null;
+      set((old) => ({ ...old, camera }));
+      camera?.initialize();
+      emitter.emit(AgentEvent.VideoTrackChanged, camera);
     }
 
     const newAudioTrack = (
       agentTracks.find((t) => t.source === Track.Source.Microphone) ??
       workerTracks.find((t) => t.source === Track.Source.Microphone) ?? null
     );
-    if (oldAudioTrack !== newAudioTrack) {
-      set((old) => ({ ...old, audioTrack: newAudioTrack }));
-      emitter.emit(AgentEvent.AudioTrackChanged, newAudioTrack);
+    if (oldMicrophone?.subtle.publication !== newAudioTrack?.publication) {
+      const microphone = newAudioTrack ? (
+        createRemoteTrack(
+          {
+            publication: newAudioTrack.publication as RemoteTrackPublication,
+            participant: newAudioTrack.participant,
+          },
+          () => get().microphone!,
+          (fn: (old: RemoteTrackInstance<Track.Source.Microphone>) => RemoteTrackInstance<Track.Source.Microphone>) => {
+            return set((old) => ({ ...old, microphone: fn(old.microphone!) }));
+          },
+        )
+      ) : null;
+      set((old) => ({ ...old, microphone }));
+      microphone?.initialize();
+      emitter.emit(AgentEvent.AudioTrackChanged, microphone);
     }
   };
 
@@ -465,8 +495,8 @@ export function createAgent(
 
     waitUntilAvailable,
 
-    audioTrack: null,
-    videoTrack: null,
+    microphone: null,
+    camera: null,
 
     attributes: {},
 
