@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useContext, useEffect, useState, useCallback, useMemo } from "react";
+import { useContext, useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   Room,
   AudioCaptureOptions,
@@ -16,11 +16,12 @@ import {
 } from "livekit-client";
 import { TrackReference, trackSourceToProtocol } from "@/agent-sdk/external-deps/components-js";
 import { ParticipantEventCallbacks } from "../node_modules/livekit-client/src/room/participant/Participant";
-import { AgentSession, AgentSessionCallbacks, AgentSessionEvent, SwitchActiveDeviceOptions } from "./agent-session/AgentSession";
+import { AgentSession, AgentSessionCallbacks, AgentSessionEvent, AgentSessionInstance, SwitchActiveDeviceOptions } from "./agent-session/AgentSession";
 import { ReceivedMessage, ReceivedMessageAggregator, ReceivedMessageAggregatorEvent, SentChatMessageOptions, SentMessage, SentMessageOptions } from "./agent-session/message";
-import { AgentCallbacks, AgentEvent } from "./agent-session/Agent";
+import { AgentCallbacks, AgentEvent, AgentInstance } from "./agent-session/Agent";
 import { ParticipantPermission } from "livekit-server-sdk";
 import { usePersistentUserChoices } from "@livekit/components-react";
+import { RemoteTrackInstance } from "./agent-session/RemoteTrack";
 
 // ---------------------
 // REACT
@@ -541,6 +542,91 @@ export function useAgentLocalParticipantPermissions() {
 // hook ideas:
 // useAgentTracks? (video)
 // useAgentControls? (control bar stuff)
+
+export const AgentVideoTrack: React.FunctionComponent<{ className?: string, track: RemoteTrackInstance<Track.Source.Camera> }> = (props) => {
+  // FIXME: imperative handle logic
+  const mediaElementRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (!mediaElementRef.current) {
+      return;
+    }
+
+    // FIXME: intersection observer logic
+    props.track.setSubscribed(true);
+
+    const cleanup = props.track.attachToMediaElement(mediaElementRef.current);
+
+    return () => {
+      props.track.setSubscribed(false);
+      cleanup();
+    };
+  }, [props.track]);
+
+  return (
+    <video
+      className={props.className}
+      ref={mediaElementRef}
+      data-lk-local-participant={false}
+      data-lk-source={props.track.source}
+      data-lk-orientation={props.track.orientation}
+      muted={true}
+      // onClick={clickHandler}
+    />
+  );
+};
+
+export const AgentAudioTrack: React.FunctionComponent<{ className?: string, track: RemoteTrackInstance<Track.Source.Microphone>, volume?: number, muted?: boolean }> = (props) => {
+  // FIXME: imperative handle logic
+  const mediaElementRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    if (typeof props.volume === 'undefined') {
+      return;
+    }
+    props.track.setVolume(props.volume);
+  }, [props.volume]);
+
+  useEffect(() => {
+    props.track.setEnabled(!props.muted);
+    // props.track.subtle.publication.track.setVolume(volume);
+  }, [props.track, props.muted]);
+
+  useEffect(() => {
+    if (!mediaElementRef.current) {
+      return;
+    }
+
+    props.track.setSubscribed(true);
+
+    const cleanup = props.track.attachToMediaElement(mediaElementRef.current);
+
+    return () => {
+      props.track.setSubscribed(false);
+      cleanup();
+    };
+  }, [props.track]);
+
+  return (
+    <audio
+      className={props.className}
+      ref={mediaElementRef}
+      data-lk-local-participant={false}
+      data-lk-source={props.track.source}
+    />
+  );
+};
+
+export const AgentRoomAudioRenderer: React.FunctionComponent<{ agent: AgentInstance, volume?: number, muted?: boolean }> = (props) => {
+  return (
+    <div style={{ display: 'none' }}>
+      {/* FIXME: Add [Track.Source.Microphone, Track.Source.ScreenShareAudio, Track.Source.Unknown] */}
+      {props.agent.microphone ? (
+        <AgentAudioTrack track={props.agent.microphone} volume={props.volume} muted={props.muted} />
+      ) : null}
+    </div>
+  );
+};
 
 export const AgentStartAudio: React.FunctionComponent<{ className: string, agentSession: AgentSessionInstance, label: string }> = ({ className, label = 'Allow Audio', agentSession }) => {
   return (

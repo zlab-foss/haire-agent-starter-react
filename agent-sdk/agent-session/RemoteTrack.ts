@@ -1,11 +1,10 @@
-import { Participant, ParticipantEvent, RemoteTrack, Room, TrackPublication } from 'livekit-client';
+import { Participant, ParticipantEvent, RemoteAudioTrack, RemoteTrack, Room, TrackPublication } from 'livekit-client';
 import type TypedEventEmitter from 'typed-emitter';
 import { RemoteTrackPublication, Track, TrackPublishOptions } from 'livekit-client';
 import { LocalUserChoices } from '@livekit/components-react';
 import { SwitchActiveDeviceOptions } from './AgentSession';
 import { loadUserChoices, saveUserChoices } from '../external-deps/components-js';
 import { participantEvents } from './LocalTrack';
-import { publicDecrypt } from 'crypto';
 
 const events = [
   ParticipantEvent.TrackMuted,
@@ -27,8 +26,10 @@ export type RemoteTrackInstance<TrackSource extends Track.Source> = {
   initialize: () => void;
   teardown: () => void;
 
-  attachToMediaElement: (element: HTMLMediaElement) => () => void;
+  attachToMediaElement: (element: TrackSource extends Track.Source.Microphone | Track.Source.ScreenShareAudio ? HTMLAudioElement : HTMLVideoElement) => () => void;
   setSubscribed: (subscribed: boolean) => void;
+  setEnabled: (enabled: boolean) => void;
+  setVolume: (volume: number) => void;
   // TODO: there is way more stuff that should be added here, this is just a stub currently
 
   source: TrackSource;
@@ -59,6 +60,20 @@ export function createRemoteTrack<TrackSource extends Track.Source>(
 
   const setSubscribed = (subscribed: boolean) => {
     options.publication.setSubscribed(subscribed)
+  };
+
+  const setEnabled = (enabled: boolean) => {
+    // FIXME: add warning for other side of if?
+    if (options.publication instanceof RemoteTrackPublication) {
+      options.publication.setEnabled(enabled)
+    }
+  };
+
+  const setVolume = (volume: number) => {
+    // FIXME: add warning for other side of if?
+    if (options.publication instanceof RemoteTrackPublication && options.publication.track instanceof RemoteAudioTrack) {
+      options.publication.track.setVolume(volume);
+    }
   };
 
   const handleParticipantEvent = () => {
@@ -115,6 +130,8 @@ export function createRemoteTrack<TrackSource extends Track.Source>(
 
     attachToMediaElement,
     setSubscribed,
+    setEnabled,
+    setVolume,
     initialize,
     teardown,
 
