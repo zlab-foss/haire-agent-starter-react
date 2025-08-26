@@ -1,5 +1,7 @@
 import * as React from "react";
 import { useContext, useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { EventEmitter } from "events";
+import { create } from 'zustand';
 import {
   Room,
   AudioCaptureOptions,
@@ -16,12 +18,15 @@ import {
 } from "livekit-client";
 import { TrackReference, trackSourceToProtocol } from "@/agent-sdk/external-deps/components-js";
 import { ParticipantEventCallbacks } from "../node_modules/livekit-client/src/room/participant/Participant";
-import { AgentSession, AgentSessionCallbacks, AgentSessionEvent, AgentSessionInstance, SwitchActiveDeviceOptions } from "./agent-session/AgentSession";
+import { AgentSession, AgentSessionCallbacks, AgentSessionEvent, AgentSessionInstance, createAgentSession, SwitchActiveDeviceOptions } from "./agent-session/AgentSession";
 import { ReceivedMessage, ReceivedMessageAggregator, ReceivedMessageAggregatorEvent, SentChatMessageOptions, SentMessage, SentMessageOptions } from "./agent-session/message";
 import { AgentCallbacks, AgentEvent, AgentInstance } from "./agent-session/Agent";
 import { ParticipantPermission } from "livekit-server-sdk";
-import { usePersistentUserChoices } from "@livekit/components-react";
+import { AudioTrack, usePersistentUserChoices } from "@livekit/components-react";
 import { RemoteTrackInstance } from "./agent-session/RemoteTrack";
+import { ManualConnectionCredentialsProvider } from "./agent-session/ConnectionCredentialsProvider";
+import TypedEventEmitter, { EventMap } from "typed-emitter";
+import { LocalTrackInstance } from "./agent-session/LocalTrack";
 
 // ---------------------
 // REACT
@@ -34,7 +39,7 @@ export const AgentSessionProvider: React.FunctionComponent<React.PropsWithChildr
   </AgentSessionContext.Provider>
 );
 
-export function useAgentSession() {
+export function useAgentSessionOLD() {
   const agentSession = useContext(AgentSessionContext);
   if (!agentSession) {
     throw new Error('useAgentSession not used within AgentSessionContext!');
@@ -543,7 +548,10 @@ export function useAgentLocalParticipantPermissions() {
 // useAgentTracks? (video)
 // useAgentControls? (control bar stuff)
 
-export const AgentVideoTrack: React.FunctionComponent<{ className?: string, track: RemoteTrackInstance<Track.Source.Camera> }> = (props) => {
+export const AgentVideoTrack: React.FunctionComponent<{
+  className?: string,
+  track: LocalTrackInstance<Track.Source.Camera | Track.Source.ScreenShare> | RemoteTrackInstance<Track.Source.Camera | Track.Source.ScreenShare>,
+} & React.HTMLAttributes<HTMLVideoElement>> = ({ track, ...rest }) => {
   // FIXME: imperative handle logic
   const mediaElementRef = useRef<HTMLVideoElement>(null);
 
@@ -551,27 +559,36 @@ export const AgentVideoTrack: React.FunctionComponent<{ className?: string, trac
     if (!mediaElementRef.current) {
       return;
     }
+    const mediaElement = mediaElementRef.current;
 
-    // FIXME: intersection observer logic
-    props.track.setSubscribed(true);
+    let cleanup: (() => void) | null = null;
+    (async () => {
+      if (!track.isLocal) {
+        // FIXME: intersection observer logic
+        track.setSubscribed(true);
+        await track.waitUntilSubscribed();
+      }
 
-    const cleanup = props.track.attachToMediaElement(mediaElementRef.current);
+      cleanup = track.attachToMediaElement(mediaElement);
+    })()
 
     return () => {
-      props.track.setSubscribed(false);
-      cleanup();
+      if (!track.isLocal) {
+        track.setSubscribed(false);
+      }
+      cleanup?.();
     };
-  }, [props.track]);
+  }, [track]);
 
   return (
     <video
-      className={props.className}
       ref={mediaElementRef}
       data-lk-local-participant={false}
-      data-lk-source={props.track.source}
-      data-lk-orientation={props.track.orientation}
+      data-lk-source={track.source}
+      data-lk-orientation={track.orientation}
       muted={true}
       // onClick={clickHandler}
+      {...rest}
     />
   );
 };
@@ -588,24 +605,28 @@ export const AgentAudioTrack: React.FunctionComponent<{ className?: string, trac
   }, [props.volume]);
 
   useEffect(() => {
-    props.track.setEnabled(!props.muted);
-    // props.track.subtle.publication.track.setVolume(volume);
-  }, [props.track, props.muted]);
-
-  useEffect(() => {
     if (!mediaElementRef.current) {
       return;
     }
+    const mediaElement = mediaElementRef.current;
 
-    props.track.setSubscribed(true);
+    let cleanup: (() => void) | null = null;
+    (async () => {
+      props.track.setSubscribed(true);
+      await props.track.waitUntilSubscribed();
 
-    const cleanup = props.track.attachToMediaElement(mediaElementRef.current);
+      cleanup = props.track.attachToMediaElement(mediaElement);
+    })()
 
     return () => {
       props.track.setSubscribed(false);
-      cleanup();
+      cleanup?.();
     };
   }, [props.track]);
+
+  useEffect(() => {
+    props.track.setEnabled(!props.muted);
+  }, [props.track, props.muted]);
 
   return (
     <audio
@@ -617,20 +638,25 @@ export const AgentAudioTrack: React.FunctionComponent<{ className?: string, trac
   );
 };
 
-export const AgentRoomAudioRenderer: React.FunctionComponent<{ agent: AgentInstance, volume?: number, muted?: boolean }> = (props) => {
+export const AgentRoomAudioRenderer: React.FunctionComponent<{ agent: AgentInstance | null, volume?: number, muted?: boolean }> = (props) => {
   return (
     <div style={{ display: 'none' }}>
       {/* FIXME: Add [Track.Source.Microphone, Track.Source.ScreenShareAudio, Track.Source.Unknown] */}
-      {props.agent.microphone ? (
-        <AgentAudioTrack track={props.agent.microphone} volume={props.volume} muted={props.muted} />
+      {props.agent?.microphone ? (
+        <AgentAudioTrack
+          track={props.agent.microphone}
+          volume={props.volume}
+          muted={props.muted}
+        />
       ) : null}
     </div>
   );
 };
 
-export const AgentStartAudio: React.FunctionComponent<{ className: string, agentSession: AgentSessionInstance, label: string }> = ({ className, label = 'Allow Audio', agentSession }) => {
+export const AgentStartAudio: React.FunctionComponent<{ className?: string, agentSession: AgentSessionInstance, label: string }> = ({ className, label = 'Allow Audio', agentSession }) => {
   return (
     <button
+      className={className}
       style={{ display: agentSession.canPlayAudio ? 'none' : 'block'}}
       onClick={() => agentSession.startAudio()}
     >
@@ -638,6 +664,57 @@ export const AgentStartAudio: React.FunctionComponent<{ className: string, agent
     </button>
   );
 };
+
+
+const emitter = new EventEmitter();
+export const useAgentSession = create<AgentSessionInstance>((set, get) => {
+  return createAgentSession({
+    credentials: new ManualConnectionCredentialsProvider(async () => {
+      const url = new URL(
+        process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? '/api/connection-details',
+        window.location.origin
+      );
+
+      let data;
+      try {
+        const res = await fetch(url.toString());
+        data = await res.json();
+      } catch (error) {
+        console.error('Error fetching connection details:', error);
+        throw new Error('Error fetching connection details!');
+      }
+
+      return data;
+    }),
+  }, get, set, emitter as any);
+});
+
+export function useAgentEvents<
+  Emitter extends TypedEventEmitter<EventMap>,
+  EmitterEventMap extends (Emitter extends TypedEventEmitter<infer EM> ? EM : never),
+  Event extends Parameters<Emitter["on"]>[0],
+  Callback extends EmitterEventMap[Event],
+>(
+  instance: { subtle: { emitter: Emitter } },
+  event: Event,
+  handlerFn: Callback | undefined,
+  dependencies?: React.DependencyList
+) {
+  const fallback = useMemo(() => () => {}, []);
+  const wrappedCallback = useCallback(handlerFn ?? fallback, dependencies ?? []);
+  const callback = dependencies ? wrappedCallback : handlerFn;
+
+  useEffect(() => {
+    if (!callback) {
+      return;
+    }
+    instance.subtle.emitter.on(event, callback);
+    return () => {
+      instance.subtle.emitter.off(event, callback);
+    };
+  }, [instance.subtle.emitter, event, callback]);
+}
+
 
 export {
   AgentSession,

@@ -1,17 +1,17 @@
 import React, { useMemo } from 'react';
-import { Track } from 'livekit-client';
+// import { Track } from 'livekit-client';
 import { AnimatePresence, motion } from 'motion/react';
-import {
-  type TrackReference,
-  useLocalParticipant,
-  useTracks,
-  useVoiceAssistant,
-} from '@livekit/components-react';
+// import {
+//   type TrackReference,
+//   useLocalParticipant,
+//   // useTracks,
+//   // useVoiceAssistant,
+// } from '@livekit/components-react';
 import { cn } from '@/lib/utils';
 import { AgentTile } from './agent-tile';
 import { AvatarTile } from './avatar-tile';
 import { VideoTile } from './video-tile';
-import { useAgentLocalParticipant, useAgentState } from '@/agent-sdk';
+import { useAgentSession } from '@/agent-sdk';
 
 const MotionVideoTile = motion.create(VideoTile);
 const MotionAgentTile = motion.create(AgentTile);
@@ -77,35 +77,56 @@ const classNames = {
   secondTileChatClosed: ['col-start-2 row-start-3', 'place-content-end'],
 };
 
-export function useLocalTrackRef(source: Track.Source) {
-  const { localParticipant } = useLocalParticipant();
-  const publication = localParticipant.getTrackPublication(source);
-  const trackRef = useMemo<TrackReference | undefined>(
-    () => (publication ? { source, participant: localParticipant, publication } : undefined),
-    [source, publication, localParticipant]
-  );
-  return trackRef;
-}
+// export function useLocalTrackRef(source: Track.Source) {
+//   const { localParticipant } = useLocalParticipant();
+//   const publication = localParticipant.getTrackPublication(source);
+//   const trackRef = useMemo<TrackReference | undefined>(
+//     () => (publication ? { source, participant: localParticipant, publication } : undefined),
+//     [source, publication, localParticipant]
+//   );
+//   return trackRef;
+// }
 
 interface MediaTilesProps {
   chatOpen: boolean;
 }
 
 export function MediaTiles({ chatOpen }: MediaTilesProps) {
-  const { legacyState: agentState } = useAgentState();
-  // const { audioTrack: agentAudioTrack, videoTrack: agentVideoTrack } = useAgentTracks();
   const {
-    // state: agentState,
-    audioTrack: agentAudioTrack,
-    videoTrack: agentVideoTrack,
-  } = useVoiceAssistant();
-  // console.log('TRACKS:', agentAudioTrack, agentVideoTrack);
-  const [screenShareTrack] = useTracks([Track.Source.ScreenShare]); // FIXME: replace with agent alternative
-  // const cameraTrack: TrackReference | undefined = useLocalTrackRef(Track.Source.Camera); // FIXME: replace with agent alternative
-  const { camera: { track: cameraTrack } } = useAgentLocalParticipant();
+    connectionState,
+    agent,
+    local,
+  } = useAgentSession();
 
-  const isCameraEnabled = cameraTrack && !cameraTrack.publication.isMuted;
-  const isScreenShareEnabled = screenShareTrack && !screenShareTrack.publication.isMuted;
+  const legacyState = useMemo((): 'disconnected' | 'connecting' | 'initializing' | 'listening' | 'thinking' | 'speaking' => {
+    if (connectionState === 'disconnected' || connectionState === 'connecting') {
+      return connectionState;
+    } else {
+      switch (agent?.conversationalState) {
+        case 'initializing':
+        case 'idle':
+          return 'initializing';
+
+        default:
+          return agent?.conversationalState ?? 'initializing';
+      }
+    }
+  }, [connectionState, agent?.conversationalState]);
+
+  // const { legacyState: agentState } = useAgentState();
+  // const { audioTrack: agentAudioTrack, videoTrack: agentVideoTrack } = useAgentTracks();
+  // const {
+  //   // state: agentState,
+  //   audioTrack: agentAudioTrack,
+  //   videoTrack: agentVideoTrack,
+  // } = useVoiceAssistant();
+  // console.log('TRACKS:', agentAudioTrack, agentVideoTrack);
+  // const [screenShareTrack] = useTracks([Track.Source.ScreenShare]); // FIXME: replace with agent alternative
+  // const cameraTrack: TrackReference | undefined = useLocalTrackRef(Track.Source.Camera); // FIXME: replace with agent alternative
+  // const { camera: { track: cameraTrack } } = useAgentLocalParticipant();
+
+  const isCameraEnabled = local?.camera?.enabled ?? false;//cameraTrack && !cameraTrack.publication.isMuted;
+  const isScreenShareEnabled = local?.screenShare?.enabled ?? false; //screenShareTrack && !screenShareTrack.publication.isMuted;
   const hasSecondTile = isCameraEnabled || isScreenShareEnabled;
 
   const transition = {
@@ -124,7 +145,7 @@ export function MediaTiles({ chatOpen }: MediaTilesProps) {
   const agentLayoutTransition = transition;
   const avatarLayoutTransition = transition;
 
-  const isAvatar = Boolean(agentVideoTrack);
+  const isAvatar = Boolean(agent?.camera?.enabled ?? false);
 
   return (
     <div className="pointer-events-none fixed inset-x-0 top-8 bottom-32 z-50 md:top-12 md:bottom-40">
@@ -149,8 +170,8 @@ export function MediaTiles({ chatOpen }: MediaTilesProps) {
                   {...animationProps}
                   animate={agentAnimate}
                   transition={agentLayoutTransition}
-                  state={agentState}
-                  audioTrack={agentAudioTrack}
+                  state={legacyState}
+                  agent={agent}
                   className={cn(chatOpen ? 'h-[90px]' : 'h-auto w-full')}
                 />
               )}
@@ -162,7 +183,7 @@ export function MediaTiles({ chatOpen }: MediaTilesProps) {
                   {...animationProps}
                   animate={avatarAnimate}
                   transition={avatarLayoutTransition}
-                  videoTrack={agentVideoTrack}
+                  track={agent?.camera}
                   className={cn(
                     chatOpen ? 'h-[90px] [&>video]:h-[90px] [&>video]:w-auto' : 'h-auto w-full'
                   )}
@@ -180,13 +201,13 @@ export function MediaTiles({ chatOpen }: MediaTilesProps) {
           >
             {/* camera */}
             <AnimatePresence>
-              {cameraTrack && isCameraEnabled && (
+              {local?.camera && isCameraEnabled && (
                 <MotionVideoTile
                   key="camera"
                   layout="position"
                   layoutId="camera"
                   {...animationProps}
-                  trackRef={cameraTrack}
+                  track={local.camera}
                   transition={{
                     ...animationProps.transition,
                     delay: chatOpen ? 0 : 0.15,
@@ -195,13 +216,13 @@ export function MediaTiles({ chatOpen }: MediaTilesProps) {
                 />
               )}
               {/* screen */}
-              {isScreenShareEnabled && (
+              {local?.screenShare && isScreenShareEnabled && (
                 <MotionVideoTile
                   key="screen"
                   layout="position"
                   layoutId="screen"
                   {...animationProps}
-                  trackRef={screenShareTrack}
+                  track={local.screenShare}
                   transition={{
                     ...animationProps.transition,
                     delay: chatOpen ? 0 : 0.15,

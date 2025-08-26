@@ -17,7 +17,7 @@ import { MediaTiles } from '@/components/livekit/media-tiles';
 import { useDebugMode } from '@/hooks/useDebug';
 import type { AppConfig } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { AgentSessionEvent, useAgentMessages, useAgentSessionEvent } from '@/agent-sdk';
+import { AgentSessionEvent, useAgentEvents, useAgentSession } from '@/agent-sdk';
 
 // function isAgentAvailable(agentState: AgentState) {
 //   return agentState == 'listening' || agentState == 'thinking' || agentState == 'speaking';
@@ -35,7 +35,9 @@ export const SessionView = ({
   sessionStarted,
   ref,
 }: React.ComponentProps<'div'> & SessionViewProps) => {
-  const { messages, send } = useAgentMessages();
+  const session = useAgentSession();
+  const messages = session.messages?.list ?? [];
+  const send = session.messages?.send;
 
   // const { state: agentState } = useVoiceAssistant();
   const [chatOpen, setChatOpen] = useState(false);
@@ -46,16 +48,16 @@ export const SessionView = ({
 
   async function handleSendMessage(message: string) {
     // FIXME: add some sort of builder for SentMessage here so it's not just a raw object?
-    await send({
+    await send?.({
       id: `${Math.random()}`, /* FIXME: fix id generation */
       direction: 'outbound',
       timestamp: new Date(),
       content: { type: 'chat', text: message },
-    });
+    }, undefined); // FIXME: make second param truly optional
     // await send(message);
   }
 
-  useAgentSessionEvent(AgentSessionEvent.AgentConnectionFailure, (reason: string) => {
+  useAgentEvents(session, AgentSessionEvent.AgentConnectionFailure, (reason: string) => {
     toastAlert({
       title: 'Session ended',
       description: (

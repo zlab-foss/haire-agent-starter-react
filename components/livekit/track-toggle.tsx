@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Track } from 'livekit-client';
-import { useTrackToggle } from '@livekit/components-react';
+// import { useTrackToggle } from '@livekit/components-react';
 import {
   MicrophoneIcon,
   MicrophoneSlashIcon,
@@ -15,7 +15,10 @@ import { Toggle } from '@/components/ui/toggle';
 import { cn } from '@/lib/utils';
 
 export type TrackToggleProps = React.ComponentProps<typeof Toggle> & {
-  source: Parameters<typeof useTrackToggle>[0]['source'];
+  source: Exclude<
+    Track.Source,
+    Track.Source.ScreenShareAudio | Track.Source.Unknown
+  >, // Parameters<typeof useTrackToggle>[0]['source'];
   pending?: boolean;
 };
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { cva } from 'class-variance-authority';
-import { LocalAudioTrack, LocalVideoTrack } from 'livekit-client';
+import { /* LocalAudioTrack, LocalVideoTrack, */ Track } from 'livekit-client';
 // import { useMaybeRoomContext, useMediaDeviceSelect } from '@livekit/components-react';
 import {
   Select,
@@ -11,11 +11,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { useAgentMediaDeviceSelect } from '@/agent-sdk';
+import { useAgentEvents /*, useAgentMediaDeviceSelect */ } from '@/agent-sdk';
+import { LocalTrackEvent, LocalTrackInstance } from '@/agent-sdk/agent-session/LocalTrack';
 
 type DeviceSelectProps = React.ComponentProps<typeof SelectTrigger> & {
-  kind: MediaDeviceKind;
-  track?: LocalAudioTrack | LocalVideoTrack | undefined;
+  track: LocalTrackInstance<Track.Source.Camera | Track.Source.Microphone> ;
+  // kind: MediaDeviceKind;
+  // track?: LocalAudioTrack | LocalVideoTrack | undefined;
   requestPermissions?: boolean;
   onMediaDeviceError?: (error: Error) => void;
   initialSelection?: string;
@@ -43,7 +45,7 @@ const selectVariants = cva(
 );
 
 export function DeviceSelect({
-  kind,
+  // kind,
   track,
   requestPermissions,
   onMediaDeviceError,
@@ -54,11 +56,13 @@ export function DeviceSelect({
 }: DeviceSelectProps) {
   const size = props.size || 'default';
 
-  const { devices, activeDeviceId, setActiveMediaDevice } = useAgentMediaDeviceSelect({
-    kind,
-    requestPermissions,
-    onError: onMediaDeviceError,
-  });
+  // const { devices, activeDeviceId, setActiveMediaDevice } = useAgentMediaDeviceSelect({
+  //   kind,
+  //   requestPermissions,
+  //   onError: onMediaDeviceError,
+  // });
+
+  useAgentEvents(track, LocalTrackEvent.ActiveDeviceChangeError, onMediaDeviceError);
 
   // const { devices, activeDeviceId, setActiveMediaDevice } = useMediaDeviceSelect({
   //   kind,
@@ -68,14 +72,14 @@ export function DeviceSelect({
   //   onError: onMediaDeviceError,
   // });
   return (
-    <Select value={activeDeviceId} onValueChange={setActiveMediaDevice}>
+    <Select value={track?.devices?.activeId} onValueChange={track?.devices?.changeActive}>
       <SelectTrigger className={cn(selectVariants({ size }), props.className)}>
         {size !== 'sm' && (
-          <SelectValue className="font-mono text-sm" placeholder={`Select a ${kind}`} />
+          <SelectValue className="font-mono text-sm" placeholder={`Select a ${track?.devices?.kind}`} />
         )}
       </SelectTrigger>
       <SelectContent>
-        {devices.map((device) => (
+        {track?.devices?.list?.map((device) => (
           <SelectItem key={device.deviceId} value={device.deviceId} className="font-mono text-xs">
             {device.label}
           </SelectItem>

@@ -1,4 +1,4 @@
-import { Participant, ParticipantEvent, Track, TrackPublication, TranscriptionSegment } from "livekit-client";
+import { Participant, ParticipantEvent, RoomEvent, Track, TrackPublication, TranscriptionSegment } from "livekit-client";
 
 // This file contains pieces copied and pasted from the components-js repository
 // Something is messed up with my local development environment and I can't figure out how to import
@@ -25,6 +25,36 @@ export const participantTrackEvents = [
   ParticipantEvent.TrackSubscriptionFailed,
   ParticipantEvent.LocalTrackPublished,
   ParticipantEvent.LocalTrackUnpublished,
+];
+
+export const roomTrackEvents = [
+  RoomEvent.ParticipantConnected,
+  RoomEvent.ParticipantDisconnected,
+  RoomEvent.ConnectionStateChanged,
+  RoomEvent.LocalTrackPublished,
+  RoomEvent.LocalTrackUnpublished,
+  RoomEvent.TrackPublished,
+  RoomEvent.TrackUnpublished,
+  RoomEvent.TrackSubscriptionStatusChanged,
+  RoomEvent.LocalTrackPublished,
+  RoomEvent.LocalTrackUnpublished,
+
+  RoomEvent.RoomMetadataChanged,
+
+  RoomEvent.ActiveSpeakersChanged,
+  RoomEvent.ConnectionQualityChanged,
+
+  RoomEvent.ParticipantPermissionsChanged,
+  RoomEvent.ParticipantMetadataChanged,
+  RoomEvent.ParticipantNameChanged,
+  RoomEvent.ParticipantAttributesChanged,
+
+  RoomEvent.TrackMuted,
+  RoomEvent.TrackUnmuted,
+  RoomEvent.TrackStreamStateChanged,
+  RoomEvent.TrackSubscriptionFailed,
+  RoomEvent.TrackSubscriptionPermissionChanged,
+  RoomEvent.TrackSubscriptionStatusChanged,
 ];
 
 export type ReceivedTranscriptionSegment = TranscriptionSegment & {

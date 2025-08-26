@@ -546,6 +546,8 @@ export function createAgentSession(
     });
 
     emitter.emit(AgentSessionEvent.Disconnected);
+
+    options.credentials.refresh();
   };
   room.on(RoomEvent.Disconnected, handleRoomDisconnected);
 

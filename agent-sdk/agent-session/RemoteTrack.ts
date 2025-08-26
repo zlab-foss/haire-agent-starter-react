@@ -6,28 +6,16 @@ import { SwitchActiveDeviceOptions } from './AgentSession';
 import { loadUserChoices, saveUserChoices } from '../external-deps/components-js';
 import { participantEvents } from './LocalTrack';
 
-const events = [
-  ParticipantEvent.TrackMuted,
-  ParticipantEvent.TrackUnmuted,
-  ParticipantEvent.ParticipantPermissionsChanged,
-  // ParticipantEvent.IsSpeakingChanged,
-  ParticipantEvent.TrackPublished,
-  ParticipantEvent.TrackUnpublished,
-  ParticipantEvent.LocalTrackPublished,
-  ParticipantEvent.LocalTrackUnpublished,
-  ParticipantEvent.MediaDevicesError,
-  ParticipantEvent.TrackSubscriptionStatusChanged,
-  // ParticipantEvent.ConnectionQualityChanged,
-];
-
 export type RemoteTrackInstance<TrackSource extends Track.Source> = {
   [Symbol.toStringTag]: "RemoteTrackInstance";
+  isLocal: false,
 
   initialize: () => void;
   teardown: () => void;
 
   attachToMediaElement: (element: TrackSource extends Track.Source.Microphone | Track.Source.ScreenShareAudio ? HTMLAudioElement : HTMLVideoElement) => () => void;
   setSubscribed: (subscribed: boolean) => void;
+  waitUntilSubscribed: (signal?: AbortSignal) => Promise<void>;
   setEnabled: (enabled: boolean) => void;
   setVolume: (volume: number) => void;
   // TODO: there is way more stuff that should be added here, this is just a stub currently
@@ -40,26 +28,58 @@ export type RemoteTrackInstance<TrackSource extends Track.Source> = {
   orientation: 'landscape' | 'portrait' | null;
 
   subtle: {
-    publication: TrackPublication,
+    publication: RemoteTrackPublication,
   };
 };
 
 export function createRemoteTrack<TrackSource extends Track.Source>(
-  options: { participant: Participant, publication: Publication},
+  options: { participant: Participant, publication: RemoteTrackPublication},
   get: () => RemoteTrackInstance<TrackSource>,
   set: (fn: (old: RemoteTrackInstance<TrackSource>) => RemoteTrackInstance<TrackSource>) => void,
 ): RemoteTrackInstance<TrackSource> {
   const attachToMediaElement = (element: HTMLMediaElement) => {
     const track = get().subtle.publication.track;
+    if (!track) {
+      throw new Error('RemoteTrackInstance.attachToMediaElement - track not set');
+    }
 
-    track?.attach(element);
+    track.attach(element);
     return () => {
-      track?.detach(element);
+      track.detach(element);
     };
   };
 
   const setSubscribed = (subscribed: boolean) => {
     options.publication.setSubscribed(subscribed)
+  };
+
+  const waitUntilSubscribed = async (signal?: AbortSignal) => {
+    const publication = get().subtle.publication;
+    if (publication.isSubscribed) {
+      return;
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      const subscribedChangedHandler = () => {
+        if (!publication.isSubscribed) {
+          return;
+        }
+        cleanup();
+        resolve();
+      };
+      const abortHandler = () => {
+        cleanup();
+        reject(new Error('RemoteTrack.waitUntilSubscribed - signal aborted'));
+      };
+
+      const cleanup = () => {
+        publication.off("subscribed", subscribedChangedHandler);
+        signal?.removeEventListener('abort', abortHandler);
+      };
+
+      publication.on("subscribed", subscribedChangedHandler);
+      signal?.addEventListener('abort', abortHandler);
+    });
   };
 
   const setEnabled = (enabled: boolean) => {
@@ -107,6 +127,7 @@ export function createRemoteTrack<TrackSource extends Track.Source>(
       ...old,
       enabled,
       muted: options.publication.isMuted,
+      dimensions: options.publication.dimensions ?? null,
       subscribed: options.publication.isSubscribed,
       orientation,
     }));
@@ -127,11 +148,15 @@ export function createRemoteTrack<TrackSource extends Track.Source>(
 
   return {
     [Symbol.toStringTag]: "RemoteTrackInstance",
+    isLocal: false,
 
     attachToMediaElement,
+
     setSubscribed,
+    waitUntilSubscribed,
     setEnabled,
     setVolume,
+
     initialize,
     teardown,
 

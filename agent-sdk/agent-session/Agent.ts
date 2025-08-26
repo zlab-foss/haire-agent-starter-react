@@ -1,8 +1,8 @@
 import type TypedEventEmitter from 'typed-emitter';
 import { EventEmitter } from "events";
 import { ConnectionState, ParticipantEvent, ParticipantKind, RemoteParticipant, RemoteTrackPublication, Room, RoomEvent, Track } from 'livekit-client';
-import { getParticipantTrackRefs, participantTrackEvents, TrackReference } from '@/agent-sdk/external-deps/components-js';
-import { ParticipantEventCallbacks } from '@/agent-sdk/external-deps/client-sdk-js';
+import { getParticipantTrackRefs, participantTrackEvents, roomTrackEvents, TrackReference } from '@/agent-sdk/external-deps/components-js';
+import { ParticipantEventCallbacks, RoomEventCallbacks } from '@/agent-sdk/external-deps/client-sdk-js';
 import { ParticipantAttributes } from '@/agent-sdk/lib/participant-attributes';
 import { createRemoteTrack, RemoteTrackInstance } from './RemoteTrack';
 
@@ -424,22 +424,42 @@ export function createAgent(
     // 2. Listen for track updates
     if (oldAgentParticipant !== newAgentParticipant) {
       set((old) => ({ ...old, subtle: { ...old.subtle, agentParticipant: newAgentParticipant } }));
+
       for (const event of participantTrackEvents) {
         oldAgentParticipant?.off(event as keyof ParticipantEventCallbacks, handleUpdateTracks);
-        if (newAgentParticipant) {
+      }
+      for (const event of roomTrackEvents) {
+        room.off(event as keyof RoomEventCallbacks, handleUpdateTracks);
+      }
+
+      if (newAgentParticipant) {
+        for (const event of participantTrackEvents) {
           newAgentParticipant.on(event as keyof ParticipantEventCallbacks, handleUpdateTracks);
-          handleUpdateTracks();
         }
+        for (const event of roomTrackEvents) {
+          room.on(event as keyof RoomEventCallbacks, handleUpdateTracks);
+        }
+        handleUpdateTracks();
       }
     }
     if (oldWorkerParticipant !== newWorkerParticipant) {
       set((old) => ({ ...old, subtle: { ...old.subtle, workerParticipant: newWorkerParticipant } }));
+
       for (const event of participantTrackEvents) {
         oldWorkerParticipant?.off(event as keyof ParticipantEventCallbacks, handleUpdateTracks);
-        if (newWorkerParticipant) {
+      }
+      for (const event of roomTrackEvents) {
+        room.off(event as keyof RoomEventCallbacks, handleUpdateTracks);
+      }
+
+      if (newWorkerParticipant) {
+        for (const event of participantTrackEvents) {
           newWorkerParticipant.on(event as keyof ParticipantEventCallbacks, handleUpdateTracks);
-          handleUpdateTracks();
         }
+        for (const event of roomTrackEvents) {
+          room.on(event as keyof RoomEventCallbacks, handleUpdateTracks);
+        }
+        handleUpdateTracks();
       }
     }
   };

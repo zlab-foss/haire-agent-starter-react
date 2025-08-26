@@ -19,3 +19,4 @@ export interface ByteStreamInfo extends BaseStreamInfo {
 export interface TextStreamInfo extends BaseStreamInfo {}
 
 export { type ParticipantEventCallbacks } from "../../node_modules/livekit-client/src/room/participant/Participant";
+export { type RoomEventCallbacks } from "../../node_modules/livekit-client/src/room/Room";

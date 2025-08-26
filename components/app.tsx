@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RoomEvent } from 'livekit-client';
 import { motion } from 'motion/react';
 import { RoomAudioRenderer, RoomContext, StartAudio } from '@livekit/components-react';
@@ -10,11 +10,12 @@ import { Toaster } from '@/components/ui/sonner';
 import { Welcome } from '@/components/welcome';
 import useConnectionDetails from '@/hooks/useConnectionDetails';
 import type { AppConfig } from '@/lib/types';
-import { AgentSession, AgentSessionEvent, AgentSessionProvider, useAgentEvent } from '@/agent-sdk';
+import { AgentRoomAudioRenderer, AgentSession, AgentSessionEvent, AgentSessionProvider, AgentStartAudio, useAgentEvent, useAgentEvents, useAgentSession } from '@/agent-sdk';
 import { create } from 'zustand';
-import { AgentSessionInstance, createAgentSession } from '@/agent-sdk/agent-session/AgentSession';
+import { AgentSessionCallbacks, AgentSessionInstance, createAgentSession } from '@/agent-sdk/agent-session/AgentSession';
 import { ManualConnectionCredentialsProvider } from '@/agent-sdk/agent-session/ConnectionCredentialsProvider';
 import { EventEmitter } from "events";
+import TypedEventEmitter, { EventMap } from 'typed-emitter';
 
 const MotionWelcome = motion.create(Welcome);
 const MotionSessionView = motion.create(SessionView);
@@ -23,49 +24,45 @@ interface AppProps {
   appConfig: AppConfig;
 }
 
-const emitter = new EventEmitter();
-const useAgentSession = create<AgentSessionInstance>((set, get) => {
-  return createAgentSession({
-    credentials: new ManualConnectionCredentialsProvider(async () => {
-      const url = new URL(
-        process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? '/api/connection-details',
-        window.location.origin
-      );
+export function App({ appConfig }: AppProps) {
+  const agentSession = useAgentSession();
+  (window as any).foo = agentSession;
 
-      let data;
-      try {
-        const res = await fetch(url.toString());
-        data = await res.json();
-      } catch (error) {
-        console.error('Error fetching connection details:', error);
-        throw new Error('Error fetching connection details!');
-      }
+  // const agentSession = useAgentSession();
 
-      return data;
-    }),
-  }, get, set, emitter as any);
-});
+  // const { connectionDetailsProvider } = useConnectionDetails();
+  // const oldAgentSession = useMemo(() => new AgentSession(connectionDetailsProvider), [connectionDetailsProvider]);
+  const [sessionStarted, setSessionStarted] = useState(false);
 
-function useAgentEvents<
-  Emitter extends TypedEventEmitter<EventMap>,
-  EmitterEventMap extends (Emitter extends TypedEventEmitter<infer EM> ? EM : never),
-  Event extends Parameters<Emitter["on"]>[0],
-  Callback extends EmitterEventMap[Event],
->(
-  instance: { subtle: { emitter: Emitter } },
-  event: Event,
-  handlerFn: Callback,
-  dependencies?: React.DependencyList
-) {
-  const wrappedCallback = useCallback(handlerFn, dependencies ?? []);
-  const callback = dependencies ? wrappedCallback : handlerFn;
+  useAgentEvents(agentSession, AgentSessionEvent.Disconnected, () => {
+    setSessionStarted(false);
+  }, []);
 
-  useEffect(() => {
-    instance.subtle.emitter.on(event, callback);
-    return () => {
-      instance.subtle.emitter.off(event, callback);
-    };
-  }, [agentSession, connectionDetailsProvider.refresh]);
+  useAgentEvents(agentSession, AgentSessionEvent.MediaDevicesError, (error) => {
+    toastAlert({
+      title: 'Encountered an error with your media devices',
+      description: `${error.name}: ${error.message}`,
+    });
+  }, [toastAlert]);
+
+  // useEffect(() => {
+  //   const onDisconnected = () => {
+  //     setSessionStarted(false);
+  //     // connectionDetailsProvider.refresh();
+  //   };
+  //   const onMediaDevicesError = (error: Error) => {
+  //     toastAlert({
+  //       title: 'Encountered an error with your media devices',
+  //       description: `${error.name}: ${error.message}`,
+  //     });
+  //   };
+  //   oldAgentSession.on(AgentSessionEvent.MediaDevicesError, onMediaDevicesError);
+  //   oldAgentSession.on(AgentSessionEvent.Disconnected, onDisconnected);
+  //   return () => {
+  //     oldAgentSession.off(AgentSessionEvent.Disconnected, onDisconnected);
+  //     oldAgentSession.off(AgentSessionEvent.MediaDevicesError, onMediaDevicesError);
+  //   };
+  // }, [oldAgentSession, connectionDetailsProvider.refresh]);
 
   useEffect(() => {
     let aborted = false;
@@ -90,7 +87,7 @@ function useAgentEvents<
       aborted = true;
       agentSession.disconnect();
     };
-  }, [agentSession, sessionStarted /* , appConfig.isPreConnectBufferEnabled */]);
+  }, [agentSession.connect, agentSession.disconnect, sessionStarted /* , appConfig.isPreConnectBufferEnabled */]);
 
   const { startButtonText } = appConfig;
 
@@ -106,26 +103,25 @@ function useAgentEvents<
         transition={{ duration: 0.5, ease: 'linear', delay: sessionStarted ? 0 : 0.5 }}
       />
 
-      <AgentSessionProvider agentSession={agentSession}>
-        <RoomContext.Provider value={agentSession.room}>
-          <RoomAudioRenderer />
-          <StartAudio label="Start Audio" />
-          {/* --- */}
-          <MotionSessionView
-            key="session-view"
-            appConfig={appConfig}
-            disabled={!sessionStarted}
-            sessionStarted={sessionStarted}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: sessionStarted ? 1 : 0 }}
-            transition={{
-              duration: 0.5,
-              ease: 'linear',
-              delay: sessionStarted ? 0.5 : 0,
-            }}
-          />
-        </RoomContext.Provider>
-      </AgentSessionProvider>
+      <AgentRoomAudioRenderer agent={agentSession.agent} />
+      {/* <RoomContext.Provider value={agentSession.subtle.room}> */}
+      {/*   <RoomAudioRenderer /> */}
+      {/* </RoomContext.Provider> */}
+      <AgentStartAudio agentSession={agentSession} label="Start Audio" />
+      {/* --- */}
+      <MotionSessionView
+        key="session-view"
+        appConfig={appConfig}
+        disabled={!sessionStarted}
+        sessionStarted={sessionStarted}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: sessionStarted ? 1 : 0 }}
+        transition={{
+          duration: 0.5,
+          ease: 'linear',
+          delay: sessionStarted ? 0.5 : 0,
+        }}
+      />
 
       <Toaster />
     </>

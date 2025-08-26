@@ -42,7 +42,9 @@ export type LocalTrackCallbacks<TrackSource extends Track.Source> = {
 
 export type LocalTrackInstance<TrackSource extends Track.Source> = {
   [Symbol.toStringTag]: "LocalTrackInstance";
+  isLocal: true,
 
+  initialize: () => void;
   teardown: () => void;
 
   /** The type of track reprsented (ie, camera, microphone, screen share, etc) */
@@ -60,6 +62,7 @@ export type LocalTrackInstance<TrackSource extends Track.Source> = {
   set: (enabled: boolean, captureOptions?: CaptureOptions<TrackSource>, publishOptions?: TrackPublishOptions) => Promise<boolean>;
   toggle: (captureOptions?: CaptureOptions<TrackSource>, publishOptions?: TrackPublishOptions) => Promise<boolean>;
   devices: TrackSource extends Track.Source.Camera | Track.Source.Microphone ? {
+    kind: TrackSource extends Track.Source.Camera ? "videoinput" : "audioinput";
     activeId: string;
     changeActive: TrackSource extends Track.Source.Camera | Track.Source.Microphone ? (deviceId?: string) => void : undefined;
     list: Array<MediaDeviceInfo>;
@@ -67,6 +70,11 @@ export type LocalTrackInstance<TrackSource extends Track.Source> = {
       listDevices: (requestPermissions?: boolean) => Promise<Array<MediaDeviceInfo>>,
     },
   } : undefined,
+
+  attachToMediaElement: (element: TrackSource extends Track.Source.Microphone | Track.Source.ScreenShareAudio ? HTMLAudioElement : HTMLVideoElement) => () => void;
+
+  dimensions: Track.Dimensions | null;
+  orientation: 'landscape' | 'portrait' | null;
 
   subtle: {
     emitter: TypedEventEmitter<LocalTrackCallbacks<TrackSource>>,
@@ -115,9 +123,22 @@ export function createLocalTrack<TrackSource extends Track.Source>(
         throw new Error(`LocalTrackInstance.handleParticipantEvent - Unable to handle processing track source ${options.trackSource}.`);
     }
 
+    let orientation = null;
+    // Set the orientation of the video track.
+    // TODO: This does not handle changes in orientation after a track got published (e.g when rotating a phone camera from portrait to landscape).
+    if (
+      typeof publication?.dimensions?.width === 'number' &&
+      typeof publication?.dimensions?.height === 'number'
+    ) {
+      orientation =
+        publication.dimensions.width > publication.dimensions.height ? 'landscape' as const : 'portrait' as const;
+    }
+
     set((old) => ({
       ...old,
       enabled,
+      dimensions: publication?.dimensions ?? null,
+      orientation,
       subtle: {
         ...old.subtle,
         publication: publication ?? null,
@@ -127,6 +148,10 @@ export function createLocalTrack<TrackSource extends Track.Source>(
   for (const eventName of participantEvents) {
     options.room.localParticipant.on(eventName, handleParticipantEvent);
   }
+
+  const initialize = () => {
+    handleParticipantEvent();
+  };
 
   const teardown = () => {
     for (const eventName of participantEvents) {
@@ -351,9 +376,23 @@ export function createLocalTrack<TrackSource extends Track.Source>(
     });
   };
 
+  const attachToMediaElement = (element: HTMLMediaElement) => {
+    const track = get().subtle.publication?.track;
+    if (!track) {
+      throw new Error('LocalTrackInstance.attachToMediaElement - track publication not set');
+    }
+
+    track?.attach(element);
+    return () => {
+      track?.detach(element);
+    };
+  };
+
   return {
     [Symbol.toStringTag]: "LocalTrackInstance",
+    isLocal: true,
 
+    initialize,
     teardown,
 
     source: options.trackSource,
@@ -364,11 +403,16 @@ export function createLocalTrack<TrackSource extends Track.Source>(
     set: setEnabled,
     toggle: toggleEnabled,
     devices: mediaDeviceKind ? {
+      kind: mediaDeviceKind,
       activeId: options.room.getActiveDevice(mediaDeviceKind) ?? 'default',
       changeActive: changeActiveDevice,
       list: [],
       subtle: { listDevices },
     } : undefined as any, // FIXME: I can't get this type logic to work...
+
+    attachToMediaElement,
+    dimensions: null,
+    orientation: null,
 
     subtle: {
       emitter,

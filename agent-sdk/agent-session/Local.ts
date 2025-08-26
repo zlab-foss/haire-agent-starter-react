@@ -1,4 +1,4 @@
-import { ParticipantEvent, Room } from 'livekit-client';
+import { ParticipantEvent, Room, RoomEvent } from 'livekit-client';
 import type TypedEventEmitter from 'typed-emitter';
 import { EventEmitter } from "events";
 import { LocalParticipant, Track } from 'livekit-client';
@@ -89,9 +89,10 @@ export function createLocal(
       );
       // track.subtle.emitter.on(AgentEvent.AgentAttributesChanged, handleAgentAttributesChanged);
       set((old) => ({ ...old, [key]: track }));
+      track.initialize();
     }
 
-    room.localParticipant.on(ParticipantEvent.ParticipantPermissionsChanged, handleParticipantPermissionsChanged);
+    room.on(RoomEvent.ParticipantPermissionsChanged, handleParticipantPermissionsChanged);
   };
 
   const teardown = () => {

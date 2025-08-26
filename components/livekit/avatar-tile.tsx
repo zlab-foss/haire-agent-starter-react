@@ -1,23 +1,19 @@
-import { type TrackReference, VideoTrack } from '@livekit/components-react';
+// import { type TrackReference, VideoTrack } from '@livekit/components-react';
 import { cn } from '@/lib/utils';
-
-interface AgentAudioTileProps {
-  videoTrack: TrackReference;
-  className?: string;
-}
+import { AgentVideoTrack } from '@/agent-sdk';
 
 export const AvatarTile = ({
-  videoTrack,
+  track,
   className,
   ref,
-}: React.ComponentProps<'div'> & AgentAudioTileProps) => {
+}: React.ComponentProps<'div'> & React.ComponentProps<typeof AgentVideoTrack>) => {
   return (
-    <div ref={ref} className={cn(className)}>
-      <VideoTrack
-        trackRef={videoTrack}
-        width={videoTrack?.publication.dimensions?.width ?? 0}
-        height={videoTrack?.publication.dimensions?.height ?? 0}
-        className="rounded-md"
+    <div ref={ref} className={cn('bg-muted overflow-hidden rounded-md', className)}>
+      <AgentVideoTrack
+        track={track}
+        width={track.dimensions?.width ?? 0}
+        height={track.dimensions?.height ?? 0}
+        className={cn('h-full w-auto')}
       />
     </div>
   );
