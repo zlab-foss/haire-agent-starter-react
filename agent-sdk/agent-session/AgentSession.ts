@@ -434,6 +434,9 @@ export type AgentSessionInstance = {
   connect: (options?: AgentSessionOptions) => Promise<void>;
   disconnect: () => Promise<void>;
 
+  canPlayAudio: boolean;
+  startAudio: () => Promise<void>;
+
   subtle: {
     emitter: TypedEventEmitter<AgentSessionCallbacks>;
     room: Room;
@@ -547,7 +550,9 @@ export function createAgentSession(
   room.on(RoomEvent.Disconnected, handleRoomDisconnected);
 
   const handleAudioPlaybackStatusChanged = async () => {
-    emitter.emit(AgentSessionEvent.AudioPlaybackStatusChanged, get().subtle.room.canPlaybackAudio);
+    const canPlayAudio = get().subtle.room.canPlaybackAudio;
+    set((old) => ({ ...old, canPlayAudio }));
+    emitter.emit(AgentSessionEvent.AudioPlaybackStatusChanged, canPlayAudio);
   };
   room.on(RoomEvent.AudioPlaybackStatusChanged, handleAudioPlaybackStatusChanged);
 
@@ -606,6 +611,8 @@ export function createAgentSession(
     // FIXME: figure out a better logging solution?
     console.warn('WARNING: Room.prepareConnection failed:', err);
   });
+
+  const startAudio = async () => get().subtle.room.startAudio();
 
   const startAgentConnectedTimeout = (agentConnectTimeoutMilliseconds: AgentSessionOptions["agentConnectTimeoutMilliseconds"] | null) => {
     return setTimeout(() => {
@@ -724,6 +731,9 @@ export function createAgentSession(
     prepareConnection,
     connect,
     disconnect,
+
+    canPlayAudio: false,
+    startAudio,
 
     subtle: {
       emitter,

@@ -542,6 +542,17 @@ export function useAgentLocalParticipantPermissions() {
 // useAgentTracks? (video)
 // useAgentControls? (control bar stuff)
 
+export const AgentStartAudio: React.FunctionComponent<{ className: string, agentSession: AgentSessionInstance, label: string }> = ({ className, label = 'Allow Audio', agentSession }) => {
+  return (
+    <button
+      style={{ display: agentSession.canPlayAudio ? 'none' : 'block'}}
+      onClick={() => agentSession.startAudio()}
+    >
+      {label}
+    </button>
+  );
+};
+
 export {
   AgentSession,
   AgentSessionEvent,
