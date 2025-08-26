@@ -46,30 +46,24 @@ const useAgentSession = create<AgentSessionInstance>((set, get) => {
   }, get, set, emitter as any);
 });
 
-export function App({ appConfig }: AppProps) {
-  const { connectionDetailsProvider } = useConnectionDetails();
-  const agentSession = useMemo(() => new AgentSession(connectionDetailsProvider), [connectionDetailsProvider]);
-  const [sessionStarted, setSessionStarted] = useState(false);
-
-  const foo = useAgentSession();
-  (window as any).foo = foo;
+function useAgentEvents<
+  Emitter extends TypedEventEmitter<EventMap>,
+  EmitterEventMap extends (Emitter extends TypedEventEmitter<infer EM> ? EM : never),
+  Event extends Parameters<Emitter["on"]>[0],
+  Callback extends EmitterEventMap[Event],
+>(
+  instance: { subtle: { emitter: Emitter } },
+  event: Event,
+  handlerFn: Callback,
+  dependencies?: React.DependencyList
+) {
+  const wrappedCallback = useCallback(handlerFn, dependencies ?? []);
+  const callback = dependencies ? wrappedCallback : handlerFn;
 
   useEffect(() => {
-    const onDisconnected = () => {
-      setSessionStarted(false);
-      connectionDetailsProvider.refresh();
-    };
-    const onMediaDevicesError = (error: Error) => {
-      toastAlert({
-        title: 'Encountered an error with your media devices',
-        description: `${error.name}: ${error.message}`,
-      });
-    };
-    agentSession.room.on(RoomEvent.MediaDevicesError, onMediaDevicesError);
-    agentSession.room.on(RoomEvent.Disconnected, onDisconnected);
+    instance.subtle.emitter.on(event, callback);
     return () => {
-      agentSession.room.off(RoomEvent.Disconnected, onDisconnected);
-      agentSession.room.off(RoomEvent.MediaDevicesError, onMediaDevicesError);
+      instance.subtle.emitter.off(event, callback);
     };
   }, [agentSession, connectionDetailsProvider.refresh]);
 
