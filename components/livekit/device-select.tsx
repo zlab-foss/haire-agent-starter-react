@@ -1,8 +1,7 @@
 'use client';
 
 import { cva } from 'class-variance-authority';
-import { /* LocalAudioTrack, LocalVideoTrack, */ Track } from 'livekit-client';
-// import { useMaybeRoomContext, useMediaDeviceSelect } from '@livekit/components-react';
+import { Track } from 'livekit-client';
 import {
   Select,
   SelectContent,
@@ -11,18 +10,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { useAgentEvents /*, useAgentMediaDeviceSelect */ } from '@/agent-sdk';
+import { useAgentEvents } from '@/agent-sdk';
 import { LocalTrackEvent, LocalTrackInstance } from '@/agent-sdk/agent-session/LocalTrack';
 
 type DeviceSelectProps = React.ComponentProps<typeof SelectTrigger> & {
-  track: LocalTrackInstance<Track.Source.Camera | Track.Source.Microphone> ;
-  // kind: MediaDeviceKind;
-  // track?: LocalAudioTrack | LocalVideoTrack | undefined;
+  track: LocalTrackInstance<Track.Source.Camera | Track.Source.Microphone>;
   requestPermissions?: boolean;
-  onMediaDeviceError?: (error: Error) => void;
-  initialSelection?: string;
-  onActiveDeviceChange?: (deviceId: string) => void;
-  onDeviceListChange?: (devices: MediaDeviceInfo[]) => void;
+  onDeviceSelectError?: (error: Error, source: Track.Source.Camera | Track.Source.Microphone) => void;
   variant?: 'default' | 'small';
 };
 
@@ -45,32 +39,15 @@ const selectVariants = cva(
 );
 
 export function DeviceSelect({
-  // kind,
   track,
   requestPermissions,
-  onMediaDeviceError,
-  // initialSelection,
-  // onActiveDeviceChange,
-  // onDeviceListChange,
+  onDeviceSelectError,
   ...props
 }: DeviceSelectProps) {
   const size = props.size || 'default';
 
-  // const { devices, activeDeviceId, setActiveMediaDevice } = useAgentMediaDeviceSelect({
-  //   kind,
-  //   requestPermissions,
-  //   onError: onMediaDeviceError,
-  // });
+  useAgentEvents(track, LocalTrackEvent.ActiveDeviceChangeError, onDeviceSelectError);
 
-  useAgentEvents(track, LocalTrackEvent.ActiveDeviceChangeError, onMediaDeviceError);
-
-  // const { devices, activeDeviceId, setActiveMediaDevice } = useMediaDeviceSelect({
-  //   kind,
-  //   room: agentSession.room,
-  //   track,
-  //   requestPermissions,
-  //   onError: onMediaDeviceError,
-  // });
   return (
     <Select value={track?.devices?.activeId} onValueChange={track?.devices?.changeActive}>
       <SelectTrigger className={cn(selectVariants({ size }), props.className)}>

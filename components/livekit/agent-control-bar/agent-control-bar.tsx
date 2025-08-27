@@ -1,9 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useEffect } from 'react';
 import { Track } from 'livekit-client';
-import { BarVisualizer, TrackReference, /* useRemoteParticipants */ } from '@livekit/components-react';
+import { BarVisualizer, TrackReference } from '@livekit/components-react';
 import { ChatTextIcon, PhoneDisconnectIcon } from '@phosphor-icons/react/dist/ssr';
 import { ChatInput } from '@/components/livekit/chat/chat-input';
 import { Button } from '@/components/ui/button';
@@ -12,12 +12,19 @@ import { AppConfig } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { DeviceSelect } from '../device-select';
 import { TrackToggle } from '../track-toggle';
-import { UseAgentControlBarProps /*, useAgentControlBar */ } from './hooks/use-agent-control-bar';
 import { useAgentSession } from '@/agent-sdk';
 
-export interface AgentControlBarProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    UseAgentControlBarProps {
+export interface ControlBarControls {
+  microphone?: boolean;
+  screenShare?: boolean;
+  chat?: boolean;
+  camera?: boolean;
+  leave?: boolean;
+}
+
+export interface AgentControlBarProps extends React.HTMLAttributes<HTMLDivElement> {
+  controls?: ControlBarControls;
+  saveUserChoices?: boolean;
   capabilities: Pick<AppConfig, 'supportsChatInput' | 'supportsVideoInput' | 'supportsScreenShare'>;
   onChatOpenChange?: (open: boolean) => void;
   onSendMessage?: (message: string) => Promise<void>;
@@ -45,35 +52,17 @@ export function AgentControlBar({
   const { local, disconnect, agent } = useAgentSession();
   const isAgentAvailable = agent?.isAvailable ?? false;
 
-  // const participants = useRemoteParticipants();
-  // const isAgentAvailable = participants.some((p) => p.isAgent);
-  // const { isAvailable: isAgentAvailable } = useAgentState();
-  
   const isInputDisabled = !chatOpen || !isAgentAvailable || isSendingMessage;
 
   const [isDisconnecting, setIsDisconnecting] = React.useState(false);
 
-  // const {
-  //   micTrackRef,
-  //   visibleControls,
-  //   // cameraToggle,
-  //   // microphoneToggle,
-  //   // screenShareToggle,
-  //   // handleAudioDeviceChange,
-  //   // handleVideoDeviceChange,
-  //   // handleDisconnect,
-  // } = useAgentControlBar({
-  //   controls,
-  //   saveUserChoices,
-  // });
   const visibleControls = {
+    microphone: controls?.microphone ?? local?.publishPermissions.microphone ?? false,
+    screenShare: controls?.screenShare ?? local?.publishPermissions.screenShare ?? false,
+    chat: controls?.chat ?? local?.publishPermissions.data ?? false,
+    camera: controls?.camera ?? local?.publishPermissions.camera ?? false,
     leave: true,
-    ...controls,
   };
-  visibleControls.microphone ??= local?.publishPermissions.microphone ?? undefined;
-  visibleControls.screenShare ??= local?.publishPermissions.screenShare ?? undefined;
-  visibleControls.camera ??= local?.publishPermissions.camera ?? undefined;
-  visibleControls.chat ??= local?.publishPermissions.data;
 
   const micTrackRef: TrackReference | null = useMemo(() => {
     if (!local?.microphone?.subtle.publication || !local?.subtle.localParticipant) {
@@ -103,19 +92,13 @@ export function AgentControlBar({
     onDisconnect?.();
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     onChatOpenChange?.(chatOpen);
   }, [chatOpen, onChatOpenChange]);
 
-  const onMicrophoneDeviceSelectError = useCallback(
-    (error: Error) => {
-      onDeviceError?.({ source: Track.Source.Microphone, error });
-    },
-    [onDeviceError]
-  );
-  const onCameraDeviceSelectError = useCallback(
-    (error: Error) => {
-      onDeviceError?.({ source: Track.Source.Camera, error });
+  const onDeviceSelectError = useCallback(
+    (error: Error, source: Track.Source.Camera | Track.Source.Microphone) => {
+      onDeviceError?.({ source, error });
     },
     [onDeviceError]
   );
@@ -178,8 +161,7 @@ export function AgentControlBar({
                 <DeviceSelect
                   size="sm"
                   track={local.microphone}
-                  onMediaDeviceError={onMicrophoneDeviceSelectError}
-                  onActiveDeviceChange={local?.microphone?.devices?.changeActive}
+                  onDeviceSelectError={onDeviceSelectError}
                   className={cn([
                     'pl-2',
                     'peer-data-[state=off]/track:text-destructive-foreground',
@@ -208,8 +190,7 @@ export function AgentControlBar({
                 <DeviceSelect
                   size="sm"
                   track={local?.camera}
-                  onMediaDeviceError={onCameraDeviceSelectError}
-                  onActiveDeviceChange={local?.camera?.devices?.changeActive}
+                  onDeviceSelectError={onDeviceSelectError}
                   className={cn([
                     'pl-2',
                     'peer-data-[state=off]/track:text-destructive-foreground',

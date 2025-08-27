@@ -2,16 +2,16 @@ import { type AgentState, BarVisualizer, type TrackReference } from '@livekit/co
 import { cn } from '@/lib/utils';
 import { useMemo } from 'react';
 import { RemoteTrackInstance } from '@/agent-sdk/agent-session/RemoteTrack';
-import { AgentInstance } from '@/agent-sdk/agent-session/Agent';
+import { AgentConnectionState, AgentInstance } from '@/agent-sdk/agent-session/Agent';
 
 interface AgentAudioTileProps {
-  state: AgentState;
+  connectionState: AgentConnectionState;
   agent: AgentInstance | null;
   className?: string;
 }
 
 export const AgentTile = ({
-  state,
+  connectionState,
   agent,
   className,
   ref,
@@ -28,13 +28,28 @@ export const AgentTile = ({
     };
   }, [agent]);
 
+  const legacyState = useMemo((): 'disconnected' | 'connecting' | 'initializing' | 'listening' | 'thinking' | 'speaking' => {
+    if (connectionState === 'disconnected' || connectionState === 'connecting') {
+      return connectionState;
+    } else {
+      switch (agent?.conversationalState) {
+        case 'initializing':
+        case 'idle':
+          return 'initializing';
+
+        default:
+          return agent?.conversationalState ?? 'initializing';
+      }
+    }
+  }, [connectionState, agent?.conversationalState]);
+
   return (
     <div ref={ref} className={cn(className)}>
       {legacyTrackReference ? (
         // FIXME: swap out this component, it's old / not in the agents sdk!
         <BarVisualizer
           barCount={5}
-          state={state}
+          state={legacyState}
           options={{ minHeight: 5 }}
           trackRef={legacyTrackReference}
           className={cn('flex aspect-video w-40 items-center justify-center gap-1')}

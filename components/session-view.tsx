@@ -2,26 +2,16 @@
 
 import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-// import {
-//   type AgentState,
-//   type ReceivedChatMessage,
-//   useRoomContext,
-//   useVoiceAssistant,
-// } from '@livekit/components-react';
 import { toastAlert } from '@/components/alert-toast';
 import { AgentControlBar } from '@/components/livekit/agent-control-bar/agent-control-bar';
 import { ChatEntry } from '@/components/livekit/chat/chat-entry';
 import { ChatMessageView } from '@/components/livekit/chat/chat-message-view';
 import { MediaTiles } from '@/components/livekit/media-tiles';
-// import useChatAndTranscription from '@/hooks/useChatAndTranscription';
 import { useDebugMode } from '@/hooks/useDebug';
 import type { AppConfig } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { AgentSessionEvent, useAgentEvents, useAgentSession } from '@/agent-sdk';
-
-// function isAgentAvailable(agentState: AgentState) {
-//   return agentState == 'listening' || agentState == 'thinking' || agentState == 'speaking';
-// }
+import { useAgentEvents, useAgentSession } from '@/agent-sdk';
+import { AgentSessionEvent } from '@/agent-sdk/agent-session/AgentSession';
 
 interface SessionViewProps {
   appConfig: AppConfig;
@@ -39,12 +29,9 @@ export const SessionView = ({
   const messages = session.messages?.list ?? [];
   const send = session.messages?.send;
 
-  // const { state: agentState } = useVoiceAssistant();
   const [chatOpen, setChatOpen] = useState(false);
-  // const { messages, send } = useChatAndTranscription();
-  // const room = useRoomContext();
 
-  useDebugMode();
+  useDebugMode({ session });
 
   async function handleSendMessage(message: string) {
     // FIXME: add some sort of builder for SentMessage here so it's not just a raw object?
@@ -54,7 +41,6 @@ export const SessionView = ({
       timestamp: new Date(),
       content: { type: 'chat', text: message },
     }, undefined); // FIXME: make second param truly optional
-    // await send(message);
   }
 
   useAgentEvents(session, AgentSessionEvent.AgentConnectionFailure, (reason: string) => {

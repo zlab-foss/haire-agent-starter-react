@@ -1,12 +1,5 @@
-import React, { useMemo } from 'react';
-// import { Track } from 'livekit-client';
+import React from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-// import {
-//   type TrackReference,
-//   useLocalParticipant,
-//   // useTracks,
-//   // useVoiceAssistant,
-// } from '@livekit/components-react';
 import { cn } from '@/lib/utils';
 import { AgentTile } from './agent-tile';
 import { AvatarTile } from './avatar-tile';
@@ -77,16 +70,6 @@ const classNames = {
   secondTileChatClosed: ['col-start-2 row-start-3', 'place-content-end'],
 };
 
-// export function useLocalTrackRef(source: Track.Source) {
-//   const { localParticipant } = useLocalParticipant();
-//   const publication = localParticipant.getTrackPublication(source);
-//   const trackRef = useMemo<TrackReference | undefined>(
-//     () => (publication ? { source, participant: localParticipant, publication } : undefined),
-//     [source, publication, localParticipant]
-//   );
-//   return trackRef;
-// }
-
 interface MediaTilesProps {
   chatOpen: boolean;
 }
@@ -97,33 +80,6 @@ export function MediaTiles({ chatOpen }: MediaTilesProps) {
     agent,
     local,
   } = useAgentSession();
-
-  const legacyState = useMemo((): 'disconnected' | 'connecting' | 'initializing' | 'listening' | 'thinking' | 'speaking' => {
-    if (connectionState === 'disconnected' || connectionState === 'connecting') {
-      return connectionState;
-    } else {
-      switch (agent?.conversationalState) {
-        case 'initializing':
-        case 'idle':
-          return 'initializing';
-
-        default:
-          return agent?.conversationalState ?? 'initializing';
-      }
-    }
-  }, [connectionState, agent?.conversationalState]);
-
-  // const { legacyState: agentState } = useAgentState();
-  // const { audioTrack: agentAudioTrack, videoTrack: agentVideoTrack } = useAgentTracks();
-  // const {
-  //   // state: agentState,
-  //   audioTrack: agentAudioTrack,
-  //   videoTrack: agentVideoTrack,
-  // } = useVoiceAssistant();
-  // console.log('TRACKS:', agentAudioTrack, agentVideoTrack);
-  // const [screenShareTrack] = useTracks([Track.Source.ScreenShare]); // FIXME: replace with agent alternative
-  // const cameraTrack: TrackReference | undefined = useLocalTrackRef(Track.Source.Camera); // FIXME: replace with agent alternative
-  // const { camera: { track: cameraTrack } } = useAgentLocalParticipant();
 
   const isCameraEnabled = local?.camera?.enabled ?? false;//cameraTrack && !cameraTrack.publication.isMuted;
   const isScreenShareEnabled = local?.screenShare?.enabled ?? false; //screenShareTrack && !screenShareTrack.publication.isMuted;
@@ -170,7 +126,7 @@ export function MediaTiles({ chatOpen }: MediaTilesProps) {
                   {...animationProps}
                   animate={agentAnimate}
                   transition={agentLayoutTransition}
-                  state={legacyState}
+                  connectionState={connectionState}
                   agent={agent}
                   className={cn(chatOpen ? 'h-[90px]' : 'h-auto w-full')}
                 />
@@ -183,7 +139,7 @@ export function MediaTiles({ chatOpen }: MediaTilesProps) {
                   {...animationProps}
                   animate={avatarAnimate}
                   transition={avatarLayoutTransition}
-                  track={agent?.camera}
+                  track={agent?.camera ?? undefined}
                   className={cn(
                     chatOpen ? 'h-[90px] [&>video]:h-[90px] [&>video]:w-auto' : 'h-auto w-full'
                   )}
