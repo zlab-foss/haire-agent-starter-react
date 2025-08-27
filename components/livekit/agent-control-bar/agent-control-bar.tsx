@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useCallback, useMemo, useEffect } from 'react';
 import { Track } from 'livekit-client';
-import { BarVisualizer, TrackReference } from '@livekit/components-react';
+import { TrackReference } from '@livekit/components-react';
 import { ChatTextIcon, PhoneDisconnectIcon } from '@phosphor-icons/react/dist/ssr';
 import { ChatInput } from '@/components/livekit/chat/chat-input';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { AppConfig } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { DeviceSelect } from '../device-select';
 import { TrackToggle } from '../track-toggle';
-import { useAgentSession } from '@/agent-sdk';
+import { AgentBarVisualizer, useAgentSession } from '@/agent-sdk';
 
 export interface ControlBarControls {
   microphone?: boolean;
@@ -49,7 +49,7 @@ export function AgentControlBar({
   const [chatOpen, setChatOpen] = React.useState(false);
   const [isSendingMessage, setIsSendingMessage] = React.useState(false);
 
-  const { local, disconnect, agent } = useAgentSession();
+  const { connectionState, local, disconnect, agent } = useAgentSession();
   const isAgentAvailable = agent?.isAvailable ?? false;
 
   const isInputDisabled = !chatOpen || !isAgentAvailable || isSendingMessage;
@@ -140,9 +140,12 @@ export function AgentControlBar({
                 className="peer/track group/track relative w-auto pr-3 pl-3 md:rounded-r-none md:border-r-0 md:pr-2"
               >
                 {micTrackRef ? (
-                  <BarVisualizer
+                  <AgentBarVisualizer
                     barCount={3}
-                    trackRef={micTrackRef}
+                    connectionState={connectionState}
+                    agent={agent}
+                    participant={local?.subtle.localParticipant ?? null}
+                    track={local?.microphone ?? null}
                     options={{ minHeight: 5 }}
                     className="flex h-full w-auto items-center justify-center gap-0.5"
                   >
@@ -153,7 +156,7 @@ export function AgentControlBar({
                         'data-lk-muted:bg-muted',
                       ])}
                     ></span>
-                  </BarVisualizer>
+                  </AgentBarVisualizer>
                 ) : null}
               </TrackToggle>
               <hr className="bg-separator1 peer-data-[state=off]/track:bg-separatorSerious relative z-10 -mr-px hidden h-4 w-px md:block" />

@@ -2,13 +2,14 @@ import * as React from "react";
 import { useEffect, useCallback, useMemo, useRef } from "react";
 import { EventEmitter } from "events";
 import { create } from 'zustand';
-import { Track } from "livekit-client";
-import { AgentSessionInstance, createAgentSession } from "./agent-session/AgentSession";
+import { Participant, Track, TrackPublication } from "livekit-client";
+import { AgentSessionConnectionState, AgentSessionInstance, createAgentSession } from "./agent-session/AgentSession";
 import { AgentInstance } from "./agent-session/Agent";
 import { RemoteTrackInstance } from "./agent-session/RemoteTrack";
 import { ManualConnectionCredentialsProvider } from "./agent-session/ConnectionCredentialsProvider";
 import TypedEventEmitter, { EventMap } from "typed-emitter";
 import { LocalTrackInstance } from "./agent-session/LocalTrack";
+import { AgentState, BarVisualizer, BarVisualizerProps, TrackReference } from "@livekit/components-react";
 
 export const AgentVideoTrack: React.FunctionComponent<{
   className?: string,
@@ -124,6 +125,58 @@ export const AgentStartAudio: React.FunctionComponent<{ className?: string, agen
     >
       {label}
     </button>
+  );
+};
+
+/**
+  * @deprecated FIXME: add a fully owned implementation of this!
+  */
+export const AgentBarVisualizer: React.FunctionComponent<
+  Exclude<BarVisualizerProps, 'state' | 'trackRef'> & {
+    connectionState: AgentSessionConnectionState,
+    agent: AgentInstance | null,
+    participant: Participant | null,
+    track: LocalTrackInstance<Track.Source> | RemoteTrackInstance<Track.Source> | null,
+  }
+> = ({ connectionState, agent, participant, track, ...rest }) => {
+  const legacyTrackReference: TrackReference | null = useMemo(() => {
+    if (!participant || !track?.subtle.publication) {
+      return null;
+    }
+
+    return {
+      participant,
+      publication: track.subtle.publication as TrackPublication,
+      source: track.source,
+    };
+  }, [participant, track]);
+
+  const legacyState = useMemo((): AgentState => {
+    if (connectionState === 'disconnected' || connectionState === 'connecting') {
+      return connectionState;
+    } else {
+      switch (agent?.conversationalState) {
+        case 'initializing':
+        case 'idle':
+          return 'initializing';
+
+        default:
+          return agent?.conversationalState ?? 'initializing';
+      }
+    }
+  }, [connectionState, agent?.conversationalState]);
+
+  if (!legacyTrackReference) {
+    // FIXME: this doesn't handle the "placeholder" state right, figure that out!
+    return null;
+  }
+
+  return (
+    <BarVisualizer
+      state={legacyState}
+      trackRef={legacyTrackReference}
+      {...rest}
+    />
   );
 };
 
