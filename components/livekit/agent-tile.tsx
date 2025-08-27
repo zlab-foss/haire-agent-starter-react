@@ -1,11 +1,11 @@
 import { type AgentState, BarVisualizer, type TrackReference } from '@livekit/components-react';
 import { cn } from '@/lib/utils';
 import { useMemo } from 'react';
-import { RemoteTrackInstance } from '@/agent-sdk/agent-session/RemoteTrack';
-import { AgentConnectionState, AgentInstance } from '@/agent-sdk/agent-session/Agent';
+import { AgentInstance } from '@/agent-sdk/agent-session/Agent';
+import { AgentSessionConnectionState } from '@/agent-sdk/agent-session/AgentSession';
 
 interface AgentAudioTileProps {
-  connectionState: AgentConnectionState;
+  connectionState: AgentSessionConnectionState;
   agent: AgentInstance | null;
   className?: string;
 }
@@ -28,7 +28,7 @@ export const AgentTile = ({
     };
   }, [agent]);
 
-  const legacyState = useMemo((): 'disconnected' | 'connecting' | 'initializing' | 'listening' | 'thinking' | 'speaking' => {
+  const legacyState = useMemo((): AgentState => {
     if (connectionState === 'disconnected' || connectionState === 'connecting') {
       return connectionState;
     } else {

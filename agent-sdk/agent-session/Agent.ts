@@ -6,9 +6,6 @@ import { ParticipantEventCallbacks, RoomEventCallbacks } from '@/agent-sdk/exter
 import { ParticipantAttributes } from '@/agent-sdk/lib/participant-attributes';
 import { createRemoteTrack, RemoteTrackInstance } from './RemoteTrack';
 
-/** State representing the current connection status to the server hosted agent */
-export type AgentConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'signalReconnecting';
-
 /** State representing the current status of the agent, whether it is ready for speach, etc */
 export type AgentConversationalState = 'disconnected' | 'initializing' | 'idle' | 'listening' | 'thinking' | 'speaking';
 
@@ -16,7 +13,6 @@ export enum AgentEvent {
   VideoTrackChanged = 'videoTrackChanged',
   AudioTrackChanged = 'audioTrackChanged',
   AgentAttributesChanged = 'agentAttributesChanged',
-  AgentConnectionStateChanged = 'agentConnectionStateChanged',
   AgentConversationalStateChanged = 'agentConversationalStateChanged',
 }
 
@@ -24,7 +20,6 @@ export type AgentCallbacks = {
   [AgentEvent.VideoTrackChanged]: (newTrack: RemoteTrackInstance<Track.Source.Camera> | null) => void;
   [AgentEvent.AudioTrackChanged]: (newTrack: RemoteTrackInstance<Track.Source.Microphone> | null) => void;
   [AgentEvent.AgentAttributesChanged]: (newAttributes: Record<string, string>) => void;
-  [AgentEvent.AgentConnectionStateChanged]: (newAgentConnectionState: AgentConnectionState) => void;
   [AgentEvent.AgentConversationalStateChanged]: (newAgentConversationalState: AgentConversationalState) => void;
 };
 

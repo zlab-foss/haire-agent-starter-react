@@ -17,11 +17,15 @@ import {
   SentMessageOptions,
   SentChatMessageOptions,
 } from "./message";
-import Agent, { AgentConnectionState, AgentConversationalState, AgentEvent, AgentInstance, createAgent } from './Agent';
+import Agent, { AgentConversationalState, AgentEvent, AgentInstance, createAgent } from './Agent';
 import { ConnectionCredentialsProvider } from './ConnectionCredentialsProvider';
 import { ParticipantAttributes } from '../lib/participant-attributes';
 import { createMessages, MessagesEvent, MessagesInstance } from './Messages';
 import { createLocal, LocalInstance } from './Local';
+
+/** State representing the current connection status to the server hosted agent */
+// FIXME: maybe just make this ConnectionState?
+export type AgentSessionConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'signalReconnecting';
 
 export enum AgentSessionEvent {
   AgentConnectionStateChanged = 'agentConnectionStateChanged',
@@ -36,7 +40,7 @@ export enum AgentSessionEvent {
 }
 
 export type AgentSessionCallbacks = {
-  [AgentSessionEvent.AgentConnectionStateChanged]: (newAgentConnectionState: AgentConnectionState) => void;
+  [AgentSessionEvent.AgentConnectionStateChanged]: (newAgentConnectionState: AgentSessionConnectionState) => void;
   [AgentSessionEvent.AgentConversationalStateChanged]: (newAgentConversationalState: AgentConversationalState) => void;
   [AgentSessionEvent.MessageReceived]: (newMessage: ReceivedMessage) => void;
   [AgentSessionEvent.AgentConnectionFailure]: (reason: string) => void;
@@ -207,7 +211,7 @@ export class AgentSession extends (EventEmitter as new () => TypedEventEmitter<A
     }, this.agentConnectTimeoutMilliseconds ?? DEFAULT_AGENT_CONNECT_TIMEOUT_MILLISECONDS);
   }
 
-  private handleAgentConnectionStateChanged = async (newConnectionState: AgentConnectionState) => {
+  private handleAgentConnectionStateChanged = async (newConnectionState: AgentSessionConnectionState) => {
     this.emit(AgentSessionEvent.AgentConnectionStateChanged, newConnectionState);
   };
 
@@ -417,7 +421,7 @@ export type AgentSessionInstance = {
   local: LocalInstance | null;
   messages: MessagesInstance | null;
 
-  connectionState: AgentConnectionState;
+  connectionState: AgentSessionConnectionState;
   isConnected: boolean;
 
   /** Returns a promise that resolves once the room connects. */
@@ -679,7 +683,7 @@ export function createAgentSession(
   };
 
   const updateConnectionState = () => {
-    let newConnectionState: AgentConnectionState;
+    let newConnectionState: AgentSessionConnectionState;
     const { connectionState, agent } = get();
 
     const roomConnectionState = room.state;
