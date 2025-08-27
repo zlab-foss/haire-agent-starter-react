@@ -96,13 +96,12 @@ export function createLocal(
   };
 
   const teardown = () => {
-    for (const [_source, key] of trackSourcesAndKeys) {
-      get()[key]?.teardown();
-      // get().[source]?.subtle.emitter.off(AgentEvent.AgentAttributesChanged, handleAgentAttributesChanged);
-      set((old) => ({ ...old, [key]: null }));
-    }
-
     room.localParticipant.off(ParticipantEvent.ParticipantPermissionsChanged, handleParticipantPermissionsChanged);
+
+    for (const [_trackSource, key] of trackSourcesAndKeys) {
+      get()[key]?.teardown();
+      set((old) => ({ ...old, [key]: null }));
+    };
   };
 
   return {

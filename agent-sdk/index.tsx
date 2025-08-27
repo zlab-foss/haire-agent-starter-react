@@ -566,7 +566,7 @@ export const AgentVideoTrack: React.FunctionComponent<{
       if (!track.isLocal) {
         // FIXME: intersection observer logic
         track.setSubscribed(true);
-        await track.waitUntilSubscribed();
+        await track.waitUntilSubscribed(); // FIXME: move inside of attachToMediaElement
       }
 
       cleanup = track.attachToMediaElement(mediaElement);
@@ -613,7 +613,7 @@ export const AgentAudioTrack: React.FunctionComponent<{ className?: string, trac
     let cleanup: (() => void) | null = null;
     (async () => {
       props.track.setSubscribed(true);
-      await props.track.waitUntilSubscribed();
+      await props.track.waitUntilSubscribed(); // FIXME: move inside of attachToMediaElement
 
       cleanup = props.track.attachToMediaElement(mediaElement);
     })()

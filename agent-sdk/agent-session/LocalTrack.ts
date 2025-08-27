@@ -382,9 +382,9 @@ export function createLocalTrack<TrackSource extends Track.Source>(
       throw new Error('LocalTrackInstance.attachToMediaElement - track publication not set');
     }
 
-    track?.attach(element);
+    track.attach(element);
     return () => {
-      track?.detach(element);
+      track.detach(element);
     };
   };
 

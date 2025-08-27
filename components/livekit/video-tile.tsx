@@ -4,8 +4,6 @@ import { VideoTrack } from '@livekit/components-react';
 import { cn } from '@/lib/utils';
 import { AgentVideoTrack } from '@/agent-sdk';
 
-// const MotionVideoTrack = motion.create(VideoTrack);
-//
 // export const VideoTile = ({
 //   trackRef,
 //   className,
@@ -32,9 +30,7 @@ export const VideoTile = ({
 }: React.ComponentProps<'div'> & React.ComponentProps<typeof AgentVideoTrack>) => {
   return (
     <div ref={ref} className={cn('bg-muted overflow-hidden rounded-md', className)}>
-      {/* <MotionVideoTrack */}
-      <MotionAgentVideoTrack
-        // trackRef={trackRef}
+      <AgentVideoTrack
         track={track}
         width={track.dimensions?.width ?? 0}
         height={track.dimensions?.height ?? 0}
