@@ -9,6 +9,7 @@ import { RemoteTrackInstance } from "./agent-session/RemoteTrack";
 import TypedEventEmitter, { EventMap } from "typed-emitter";
 import { LocalTrackInstance } from "./agent-session/LocalTrack";
 import { AgentState, BarVisualizer, BarVisualizerProps, TrackReference } from "@livekit/components-react";
+import { ManualConnectionCredentialsProvider } from "./agent-session/ConnectionCredentialsProvider";
 
 export const AgentVideoTrack: React.FunctionComponent<{
   className?: string,
@@ -214,3 +215,28 @@ export function useAgentEvents<
     };
   }, [instance.subtle.emitter, event, callback]);
 }
+
+
+
+
+// NOTE: this is preconfigured for the agent starter react app
+export const useAgentSession = createUseAgentSession({
+  credentials: new ManualConnectionCredentialsProvider(async () => {
+    const url = new URL(
+      process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? '/api/connection-details',
+      window.location.origin
+    );
+
+    let data;
+    try {
+      const res = await fetch(url.toString());
+      data = await res.json();
+    } catch (error) {
+      console.error('Error fetching connection details:', error);
+      throw new Error('Error fetching connection details!');
+    }
+
+    return data;
+  }),
+});
+
