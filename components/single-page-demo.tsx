@@ -56,7 +56,7 @@ export default function SinglePageDemo() {
         <div>
           {agentSession.local ? (
             <div>
-              <Button onClick={() => agentSession.local?.camera?.toggle?.()}>
+              <Button onClick={() => agentSession.local.camera?.toggle?.()}>
                 {agentSession.local.camera?.enabled ? 'Disable' : 'Enable'} local camera
               </Button>
               <Button onClick={() => agentSession.local?.microphone?.toggle?.()}>
@@ -67,8 +67,8 @@ export default function SinglePageDemo() {
                 {agentSession.local.microphone?.devices.list.map(item => (
                   <li
                     key={item.deviceId}
-                    onClick={() => agentSession.local?.microphone?.devices.changeActive(item.deviceId)}
-                    style={{ color: item.deviceId === agentSession?.local?.microphone?.devices.activeId ? 'red' : undefined }}
+                    onClick={() => agentSession.local.microphone?.devices.changeActive(item.deviceId)}
+                    style={{ color: item.deviceId === agentSession?.local.microphone?.devices.activeId ? 'red' : undefined }}
                   >
                     {item.label}
                   </li>
@@ -77,10 +77,10 @@ export default function SinglePageDemo() {
             </div>
           ) : null}
 
-          {agentSession.local?.camera ? (
+          {agentSession.local.camera ? (
             <AgentVideoTrack track={agentSession.local.camera} />
           ) : null}
-          {agentSession.agent?.camera ? (
+          {agentSession.agent.camera ? (
             <AgentVideoTrack track={agentSession.agent.camera} />
           ) : null}
 

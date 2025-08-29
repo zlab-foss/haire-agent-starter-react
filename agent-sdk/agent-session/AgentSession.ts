@@ -106,8 +106,18 @@ type AgentSessionInstanceCommon = {
   };
 };
 
+type AgentSessionInstanceConnecting = AgentSessionInstanceCommon & {
+  connectionState: "connecting";
+  isConnected: false;
+  isReconnecting: false;
+
+  agent: AgentInstance | null;
+  local: LocalInstance | null;
+  messages: MessagesInstance | null;
+};
+
 type AgentSessionInstanceConnected = AgentSessionInstanceCommon & {
-  connectionState: "connected";
+  connectionState: "connected" | "reconnecting" | "signalReconnecting";
   isConnected: true;
   isReconnecting: boolean;
 
@@ -116,18 +126,8 @@ type AgentSessionInstanceConnected = AgentSessionInstanceCommon & {
   messages: MessagesInstance;
 };
 
-type AgentSessionInstanceReconnecting = AgentSessionInstanceCommon & {
-  connectionState: "reconnecting" | "signalReconnecting";
-  isConnected: true;
-  isReconnecting: true;
-
-  agent: AgentInstance;
-  local: LocalInstance;
-  messages: MessagesInstance;
-};
-
-type AgentSessionInstanceNotConnected = AgentSessionInstanceCommon & {
-  connectionState: "connecting" | "disconnected";
+type AgentSessionInstanceDisconnected = AgentSessionInstanceCommon & {
+  connectionState: "disconnected";
   isConnected: false;
   isReconnecting: false;
 
@@ -136,7 +136,7 @@ type AgentSessionInstanceNotConnected = AgentSessionInstanceCommon & {
   messages: null;
 };
 
-export type AgentSessionInstance = AgentSessionInstanceConnected | AgentSessionInstanceReconnecting | AgentSessionInstanceNotConnected;
+export type AgentSessionInstance = AgentSessionInstanceConnecting | AgentSessionInstanceConnected | AgentSessionInstanceDisconnected;
 
  /**
    * AgentSession represents a connection to a LiveKit Agent, providing abstractions to make 1:1
@@ -157,14 +157,14 @@ export function createAgentSession(
   const handleRoomConnected = async () => {
     console.log('!! CONNECTED');
 
-    const { get: agentGet, set: agentSet } = createScopedGetSet(get, set, 'agent');
+    const { get: agentGet, set: agentSet } = createScopedGetSet(get, set, 'agent', 'AgentSession');
     const agent = createAgent(room, agentGet, agentSet);
     agent.subtle.emitter.on(AgentEvent.AgentAttributesChanged, handleAgentAttributesChanged);
 
-    const { get: localGet, set: localSet } = createScopedGetSet(get, set, 'local');
+    const { get: localGet, set: localSet } = createScopedGetSet(get, set, 'local', 'AgentSession');
     const local = createLocal(room, localGet, localSet);
 
-    const { get: messagesGet, set: messagesSet } = createScopedGetSet(get, set, 'messages');
+    const { get: messagesGet, set: messagesSet } = createScopedGetSet(get, set, 'messages', 'AgentSession');
     const messages = createMessages(room, messagesGet, messagesSet);
 
     set((old) => generateConnectionStateUpdate(old, agent, local, messages));
@@ -229,6 +229,12 @@ export function createAgentSession(
   room.on(RoomEvent.MediaDevicesError, handleMediaDevicesError);
 
   const handleConnectionStateChanged = () => {
+    // Skip handling connected / disconnected, because handleRoomConnected / handleRoomDisconnected
+    // already run for these state changes
+    if (room.state === ConnectionState.Connected || room.state === ConnectionState.Disconnected) {
+      return;
+    }
+
     set((old) => generateConnectionStateUpdate(old, old.agent, old.local, old.messages));
   };
   room.on(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
@@ -385,24 +391,45 @@ export function createAgentSession(
     }
 
     switch (newConnectionState) {
-      case 'connected':
-      case 'reconnecting':
-      case 'signalReconnecting':
-        if (!local || !agent || !messages) {
-          throw new Error(`AgentSessionInstance.generateConnectionStateUpdate - attempted to transition to connection state ${newConnectionState}, but local / agent / messages not found.`);
+      case 'connecting':
+        if (old.connectionState === 'connecting' && old.local === local && old.agent === agent && old.messages === messages) {
+          return old;
         }
         return {
           ...old,
 
-          connectionState: 'connected',
-          ...generateDerivedConnectionStateValues('connected'),
+          connectionState: 'connecting',
+          ...generateDerivedConnectionStateValues('connecting'),
 
           local,
           agent,
           messages,
         };
 
-      default:
+      case 'connected':
+      case 'reconnecting':
+      case 'signalReconnecting':
+        if (!local || !agent || !messages) {
+          throw new Error(`AgentSessionInstance.generateConnectionStateUpdate - attempted to transition to connection state ${newConnectionState}, but local / agent / messages not found.`);
+        }
+        if (old.connectionState === newConnectionState && old.local === local && old.agent === agent && old.messages === messages) {
+          return old;
+        }
+        return {
+          ...old,
+
+          connectionState: newConnectionState,
+          ...generateDerivedConnectionStateValues(newConnectionState),
+
+          local,
+          agent,
+          messages,
+        };
+
+      case 'disconnected':
+        if (old.connectionState === newConnectionState) {
+          return old;
+        }
         return {
           ...old,
 

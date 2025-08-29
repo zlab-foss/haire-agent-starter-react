@@ -5,6 +5,7 @@ import { LocalParticipant, Track } from 'livekit-client';
 import { createLocalTrack, LocalTrackInstance } from './LocalTrack';
 import { ParticipantPermission } from 'livekit-server-sdk';
 import { trackSourceToProtocol } from '../external-deps/components-js';
+import { createScopedGetSet } from '../lib/scoped-get-set';
 
 export enum LocalTrackEvent {
   // PendingDisabled = 'pendingDisabled',
@@ -13,12 +14,6 @@ export enum LocalTrackEvent {
 export type LocalCallbacks = {
   // [LocalTrackEvent.PendingDisabled]: () => void;
 };
-
-const trackSourcesAndKeys = [
-  [Track.Source.Camera, 'camera'],
-  [Track.Source.Microphone, 'microphone'],
-  [Track.Source.ScreenShare, 'screenShare'],
-] as Array<[Track.Source, 'camera' | 'microphone' | 'screenShare']>;
 
 export type LocalInstance = {
   [Symbol.toStringTag]: "LocalInstance";
@@ -31,9 +26,9 @@ export type LocalInstance = {
     data: boolean;
   };
 
-  camera: LocalTrackInstance<Track.Source.Camera> | null;
-  microphone: LocalTrackInstance<Track.Source.Microphone> | null;
-  screenShare: LocalTrackInstance<Track.Source.ScreenShare> | null;
+  camera: LocalTrackInstance<Track.Source.Camera>;
+  microphone: LocalTrackInstance<Track.Source.Microphone>;
+  screenShare: LocalTrackInstance<Track.Source.ScreenShare>;
 
   subtle: {
     emitter: TypedEventEmitter<LocalCallbacks>;
@@ -76,20 +71,9 @@ export function createLocal(
   };
 
   const initialize = () => {
-    for (const [trackSource, key] of trackSourcesAndKeys) {
-      const track = createLocalTrack(
-        {
-          room,
-          trackSource,
-          preventUserChoicesSave: false,
-        },
-        () => get()[key]!, // FIXME: handle null case better
-        (fn) => set((old) => ({ ...old, [key]: fn(old[key]!) })),
-      );
-      // track.subtle.emitter.on(AgentEvent.AgentAttributesChanged, handleAgentAttributesChanged);
-      set((old) => ({ ...old, [key]: track }));
-      track.subtle.initialize();
-    }
+    get().camera.subtle.initialize();
+    get().microphone.subtle.initialize();
+    get().screenShare.subtle.initialize();
 
     room.on(RoomEvent.ParticipantPermissionsChanged, handleParticipantPermissionsChanged);
   };
@@ -97,10 +81,34 @@ export function createLocal(
   const teardown = () => {
     room.localParticipant.off(ParticipantEvent.ParticipantPermissionsChanged, handleParticipantPermissionsChanged);
 
-    for (const [_trackSource, key] of trackSourcesAndKeys) {
-      get()[key]?.subtle.teardown();
-      set((old) => ({ ...old, [key]: null }));
-    };
+    get().camera.subtle.teardown();
+    get().microphone.subtle.teardown();
+    get().screenShare.subtle.teardown();
+  };
+
+  const generateTracks = () => {
+    const { get: trackGet, set: trackSet } = createScopedGetSet(get, set, 'camera', 'LocalTrack');
+    const camera = createLocalTrack({
+      room,
+      trackSource: Track.Source.Camera,
+      preventUserChoicesSave: false,
+    }, trackGet, trackSet);
+
+    const { get: microphoneTrackGet, set: microphoneTrackSet } = createScopedGetSet(get, set, 'microphone', 'LocalTrack');
+    const microphone = createLocalTrack({
+      room,
+      trackSource: Track.Source.Microphone,
+      preventUserChoicesSave: false,
+    }, microphoneTrackGet, microphoneTrackSet);
+
+    const { get: screenShareTrackGet, set: screenShareTrackSet } = createScopedGetSet(get, set, 'screenShare', 'LocalTrack');
+    const screenShare = createLocalTrack({
+      room,
+      trackSource: Track.Source.ScreenShare,
+      preventUserChoicesSave: false,
+    }, screenShareTrackGet, screenShareTrackSet);
+
+    return { camera, microphone, screenShare };
   };
 
   return {
@@ -114,9 +122,7 @@ export function createLocal(
       data: false,
     },
 
-    camera: null,
-    microphone: null,
-    screenShare: null,
+    ...generateTracks(),
 
     subtle: {
       emitter,

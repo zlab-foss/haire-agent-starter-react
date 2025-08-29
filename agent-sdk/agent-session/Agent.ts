@@ -53,8 +53,8 @@ type AgentInstanceAvailable = AgentInstanceCommon & {
   /** Is the agent ready for user interaction? */
   isAvailable: true;
 
-  camera: RemoteTrackInstance<Track.Source.Camera>;
-  microphone: RemoteTrackInstance<Track.Source.Microphone>;
+  camera: RemoteTrackInstance<Track.Source.Camera> | null;
+  microphone: RemoteTrackInstance<Track.Source.Microphone> | null;
 };
 
 type AgentInstanceUnAvailable = AgentInstanceCommon & {
@@ -96,8 +96,9 @@ export function createAgent(
   };
 
   const initialize = () => {
-    updateParticipants();
     set((old) => generateConversationalStateUpdate(old, old.camera, old.microphone));
+
+    updateParticipants();
 
     room.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
     room.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
@@ -111,10 +112,11 @@ export function createAgent(
     room.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
     room.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
 
+    updateParticipants(); // Detaches any participant related event handlers
+
     get().camera?.subtle.teardown();
     get().microphone?.subtle.teardown();
     set((old) => generateConversationalStateUpdate(old, null, null));
-    updateParticipants(); // Detaches any participant related event handlers
   };
 
   const waitUntilAvailable = async (signal?: AbortSignal) => {
@@ -168,33 +170,51 @@ export function createAgent(
       agentTracks.find((t) => t.source === Track.Source.Camera) ??
       workerTracks.find((t) => t.source === Track.Source.Camera) ?? null
     );
-    let camera: AgentInstance["camera"] = null;
-    if (oldCamera?.subtle.publication !== newVideoTrack?.publication && newVideoTrack) {
-      const { get: cameraGet, set: cameraSet } = createScopedGetSet(get, set, 'camera');
-      camera = createRemoteTrack({
-        publication: newVideoTrack.publication as RemoteTrackPublication,
-        participant: newVideoTrack.participant,
-      }, cameraGet, cameraSet);
-      camera.subtle.initialize();
+
+    let camera = oldCamera;
+    if (oldCamera?.subtle.publication !== newVideoTrack?.publication) {
+      if (newVideoTrack) {
+        const { get: cameraGet, set: cameraSet } = createScopedGetSet(get, set, 'camera', 'Agent');
+        camera = createRemoteTrack({
+          publication: newVideoTrack.publication as RemoteTrackPublication,
+          participant: newVideoTrack.participant,
+        }, cameraGet, cameraSet);
+      } else {
+        camera = null;
+      }
     }
-    emitter.emit(AgentEvent.CameraChanged, camera);
+    if (camera !== oldCamera) {
+      emitter.emit(AgentEvent.CameraChanged, camera);
+    }
 
     const newAudioTrack = (
       agentTracks.find((t) => t.source === Track.Source.Microphone) ??
       workerTracks.find((t) => t.source === Track.Source.Microphone) ?? null
     );
-    let microphone: AgentInstance["microphone"] = null;
-    if (oldMicrophone?.subtle.publication !== newVideoTrack?.publication && newAudioTrack) {
-      const { get: microphoneGet, set: microphoneSet } = createScopedGetSet(get, set, 'microphone');
-      microphone = createRemoteTrack({
-        publication: newAudioTrack.publication as RemoteTrackPublication,
-        participant: newAudioTrack.participant,
-      }, microphoneGet, microphoneSet);
-      microphone.subtle.initialize();
+    let microphone = oldMicrophone;
+    if (oldMicrophone?.subtle.publication !== newAudioTrack?.publication) {
+      if (newAudioTrack) {
+        const { get: microphoneGet, set: microphoneSet } = createScopedGetSet(get, set, 'microphone', 'Agent');
+        microphone = createRemoteTrack({
+          publication: newAudioTrack.publication as RemoteTrackPublication,
+          participant: newAudioTrack.participant,
+        }, microphoneGet, microphoneSet);
+      } else {
+        microphone = null;
+      }
     }
-    emitter.emit(AgentEvent.MicrophoneChanged, microphone);
+    if (microphone !== oldMicrophone) {
+      emitter.emit(AgentEvent.MicrophoneChanged, microphone);
+    }
 
     set((old) => generateConversationalStateUpdate(old, camera, microphone));
+
+    if (camera !== oldCamera) {
+      camera?.subtle.initialize();
+    }
+    if (microphone !== oldMicrophone) {
+      microphone?.subtle.initialize();
+    }
   };
 
   const updateParticipants = () => {
@@ -309,14 +329,17 @@ export function createAgent(
     if (old.conversationalState !== newConversationalState) {
       emitter.emit(AgentEvent.AgentConversationalStateChanged, newConversationalState);
     }
-
     switch (newConversationalState) {
-      case 'thinking':
       case 'listening':
+      case 'thinking':
       case 'speaking':
-        if (!camera || !microphone) {
-          throw new Error(`AgentInstance.generateConversationalStateUpdate - attempted to transition to conversational state ${newConversationalState}, but camera / microphone not found.`);
+        // if (camera || !microphone) {
+        //   throw new Error(`AgentInstance.generateConversationalStateUpdate - attempted to transition to conversational state ${newConversationalState}, but camera / microphone not found.`);
+        // }
+        if (old.conversationalState === newConversationalState && old.camera === camera && old.microphone === microphone) {
+          return old;
         }
+
         return {
           ...old,
 
@@ -327,7 +350,12 @@ export function createAgent(
           microphone,
         };
 
-      default:
+      case 'disconnected':
+      case 'initializing':
+      case 'idle':
+        if (old.conversationalState === newConversationalState) {
+          return old;
+        }
         return {
           ...old,
 

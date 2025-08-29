@@ -146,12 +146,23 @@ export function createLocalTrack<TrackSource extends Track.Source>(
       },
     }));
   };
-  for (const eventName of participantEvents) {
-    options.room.localParticipant.on(eventName, handleParticipantEvent);
-  }
 
   const initialize = () => {
     handleParticipantEvent();
+
+    for (const eventName of participantEvents) {
+      options.room.localParticipant.on(eventName, handleParticipantEvent);
+    }
+
+    if (mediaDeviceKind !== null && typeof window !== 'undefined') {
+      handleDeviceChange();
+      if (!window.isSecureContext) {
+        throw new Error(
+          `Accessing media devices is available only in secure contexts (HTTPS and localhost), in some or all supporting browsers. See: https://developer.mozilla.org/en-US/docs/Web/API/Navigator/mediaDevices`,
+        );
+      }
+      navigator?.mediaDevices?.addEventListener('devicechange', handleDeviceChange);
+    }
   };
 
   const teardown = () => {
@@ -340,16 +351,6 @@ export function createLocalTrack<TrackSource extends Track.Source>(
       return { ...old, devices: { ...old.devices, list } };
     });
   };
-
-  if (mediaDeviceKind !== null && typeof window !== 'undefined') {
-    handleDeviceChange();
-    if (!window.isSecureContext) {
-      throw new Error(
-        `Accessing media devices is available only in secure contexts (HTTPS and localhost), in some or all supporting browsers. See: https://developer.mozilla.org/en-US/docs/Web/API/Navigator/mediaDevices`,
-      );
-    }
-    navigator?.mediaDevices?.addEventListener('devicechange', handleDeviceChange);
-  }
 
   const waitUntilNotPending = async (signal?: AbortSignal) => {
     const { pending } = get();
