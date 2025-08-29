@@ -140,15 +140,9 @@ export function createAgentSession(
 ): AgentSessionInstance {
   const room = new Room();
 
-  // FIXME: is this event worth it? It's just proxying an event from the messages layer.
-  const handleIncomingMessage = (incomingMessage: ReceivedMessage) => {
-    emitter.emit(AgentSessionEvent.MessageReceived, incomingMessage);
-  };
-
   const handleAgentAttributesChanged = () => {
     updateConnectionState();
   };
-
 
   const handleRoomConnected = async () => {
     console.log('!! CONNECTED');
@@ -184,7 +178,6 @@ export function createAgentSession(
       (fn) => set((old) => ({ ...old, messages: fn(old.messages!) })),
       messagesEmitter as any,
     );
-    messages.subtle.emitter.on(MessagesEvent.MessageReceived, handleIncomingMessage);
     set((old) => ({ ...old, messages }));
     messages.initialize();
 
@@ -219,7 +212,6 @@ export function createAgentSession(
     set((old) => ({ ...old, local: null }));
 
     get().messages?.teardown();
-    get().messages?.subtle.emitter.off(MessagesEvent.MessageReceived, handleIncomingMessage);
     set((old) => ({ ...old, messages: null }));
 
     set((old) => {
