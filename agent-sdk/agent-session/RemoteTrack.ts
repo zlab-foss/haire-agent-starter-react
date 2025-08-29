@@ -1,9 +1,4 @@
-import { Participant, ParticipantEvent, RemoteAudioTrack, RemoteTrack, Room, TrackPublication } from 'livekit-client';
-import type TypedEventEmitter from 'typed-emitter';
-import { RemoteTrackPublication, Track, TrackPublishOptions } from 'livekit-client';
-import { LocalUserChoices } from '@livekit/components-react';
-import { SwitchActiveDeviceOptions } from './AgentSession';
-import { loadUserChoices, saveUserChoices } from '../external-deps/components-js';
+import { Participant, RemoteAudioTrack, RemoteTrackPublication, Track } from 'livekit-client';
 import { participantEvents } from './LocalTrack';
 
 export type RemoteTrackInstance<TrackSource extends Track.Source> = {

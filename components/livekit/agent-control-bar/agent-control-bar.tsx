@@ -1,9 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { useCallback, useMemo, useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { Track } from 'livekit-client';
-import { TrackReference } from '@livekit/components-react';
 import { ChatTextIcon, PhoneDisconnectIcon } from '@phosphor-icons/react/dist/ssr';
 import { ChatInput } from '@/components/livekit/chat/chat-input';
 import { Button } from '@/components/ui/button';
@@ -63,18 +62,6 @@ export function AgentControlBar({
     camera: controls?.camera ?? local?.publishPermissions.camera ?? false,
     leave: true,
   };
-
-  const micTrackRef: TrackReference | null = useMemo(() => {
-    if (!local?.microphone?.subtle.publication || !local?.subtle.localParticipant) {
-      return null;
-    }
-
-    return {
-      participant: local.subtle.localParticipant, // FIXME: this may not always be right?
-      publication: local.microphone.subtle.publication,
-      source: local.microphone.source,
-    };
-  }, [agent]);
 
   const handleSendMessage = async (message: string) => {
     setIsSendingMessage(true);
@@ -139,25 +126,23 @@ export function AgentControlBar({
                 onPressedChange={() => local?.microphone?.toggle?.()}
                 className="peer/track group/track relative w-auto pr-3 pl-3 md:rounded-r-none md:border-r-0 md:pr-2"
               >
-                {micTrackRef ? (
-                  <AgentBarVisualizer
-                    barCount={3}
-                    connectionState={connectionState}
-                    agent={agent}
-                    participant={local?.subtle.localParticipant ?? null}
-                    track={local?.microphone ?? null}
-                    options={{ minHeight: 5 }}
-                    className="flex h-full w-auto items-center justify-center gap-0.5"
-                  >
-                    <span
-                      className={cn([
-                        'h-full w-0.5 origin-center rounded-2xl',
-                        'group-data-[state=on]/track:bg-fg1 group-data-[state=off]/track:bg-destructive-foreground',
-                        'data-lk-muted:bg-muted',
-                      ])}
-                    ></span>
-                  </AgentBarVisualizer>
-                ) : null}
+                <AgentBarVisualizer
+                  barCount={3}
+                  connectionState={connectionState}
+                  agent={agent}
+                  participant={local?.subtle.localParticipant ?? null}
+                  track={local?.microphone ?? null}
+                  options={{ minHeight: 5 }}
+                  className="flex h-full w-auto items-center justify-center gap-0.5"
+                >
+                  <span
+                    className={cn([
+                      'h-full w-0.5 origin-center rounded-2xl',
+                      'group-data-[state=on]/track:bg-fg1 group-data-[state=off]/track:bg-destructive-foreground',
+                      'data-lk-muted:bg-muted',
+                    ])}
+                  ></span>
+                </AgentBarVisualizer>
               </TrackToggle>
               <hr className="bg-separator1 peer-data-[state=off]/track:bg-separatorSerious relative z-10 -mr-px hidden h-4 w-px md:block" />
               {local?.microphone ? (

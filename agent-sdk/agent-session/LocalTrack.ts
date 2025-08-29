@@ -3,9 +3,8 @@ import { EventEmitter } from 'events';
 import type TypedEventEmitter from 'typed-emitter';
 import { AudioCaptureOptions, LocalTrackPublication, ParticipantEvent, ScreenShareCaptureOptions, Track, TrackPublishOptions, VideoCaptureOptions } from 'livekit-client';
 import { ParticipantEventCallbacks } from '@/agent-sdk/external-deps/client-sdk-js';
-import { LocalUserChoices } from '@livekit/components-react';
 import { SwitchActiveDeviceOptions } from './AgentSession';
-import { loadUserChoices, saveUserChoices } from '../external-deps/components-js';
+import { type LocalUserChoices, loadUserChoices, saveUserChoices } from '../external-deps/components-js';
 
 // FIXME: rename this
 export const participantEvents: Array<keyof ParticipantEventCallbacks> = [

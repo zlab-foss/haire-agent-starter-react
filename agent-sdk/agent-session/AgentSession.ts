@@ -1,25 +1,11 @@
 import type TypedEventEmitter from 'typed-emitter';
 import { Room, RoomEvent, ConnectionState, TrackPublishOptions } from 'livekit-client';
 
-import {
-  type ReceivedMessage,
-  type SentMessage,
-  MessageSender,
-  MessageReceiver,
-  ChatMessageSender,
-  CombinedMessageSender,
-  CombinedMessageReceiver,
-  TranscriptionMessageReceiver,
-  ReceivedMessageAggregator,
-  type ReceivedMessageAggregatorOptions,
-  ReceivedMessageAggregatorEvent,
-  SentMessageOptions,
-  SentChatMessageOptions,
-} from "./message";
+import { type ReceivedMessage } from "./message";
 import { AgentConversationalState, AgentEvent, AgentInstance, createAgent } from './Agent';
 import { ConnectionCredentialsProvider } from './ConnectionCredentialsProvider';
 import { ParticipantAttributes } from '../lib/participant-attributes';
-import { createMessages, MessagesEvent, MessagesInstance } from './Messages';
+import { createMessages, MessagesInstance } from './Messages';
 import { createLocal, LocalInstance } from './Local';
 
 /** State representing the current connection status to the server hosted agent */

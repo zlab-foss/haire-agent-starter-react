@@ -1,10 +1,10 @@
-import type TypedEventEmitter from 'typed-emitter';
 import { ConnectionState, ParticipantEvent, ParticipantKind, RemoteParticipant, RemoteTrackPublication, Room, RoomEvent, Track } from 'livekit-client';
+import type TypedEventEmitter from 'typed-emitter';
+import { EventEmitter } from 'stream';
 import { getParticipantTrackRefs, participantTrackEvents, roomTrackEvents } from '@/agent-sdk/external-deps/components-js';
 import { ParticipantEventCallbacks, RoomEventCallbacks } from '@/agent-sdk/external-deps/client-sdk-js';
 import { ParticipantAttributes } from '@/agent-sdk/lib/participant-attributes';
 import { createRemoteTrack, RemoteTrackInstance } from './RemoteTrack';
-import { EventEmitter } from 'stream';
 
 /** State representing the current status of the agent, whether it is ready for speach, etc */
 export type AgentConversationalState = 'disconnected' | 'initializing' | 'idle' | 'listening' | 'thinking' | 'speaking';
