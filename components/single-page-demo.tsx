@@ -95,7 +95,7 @@ export default function SinglePageDemo() {
                 onChange={e => setChatMessage(e.target.value)}
               />
               <Button onClick={() => {
-                agentSession.messages?.send(chatMessage, undefined);
+                agentSession.messages?.send(chatMessage);
                 setChatMessage('');
               }}>Send</Button>
             </li>

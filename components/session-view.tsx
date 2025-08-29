@@ -40,7 +40,7 @@ export const SessionView = ({
       direction: 'outbound',
       timestamp: new Date(),
       content: { type: 'chat', text: message },
-    }, undefined); // FIXME: make second param truly optional
+    });
   }
 
   useAgentEvents(session, AgentSessionEvent.AgentConnectionFailure, (reason: string) => {

@@ -18,6 +18,20 @@ import {
   SentChatMessageOptions,
 } from "./message";
 
+type SendMessageFunction = {
+  // Plain chat messages
+  (message: string): Promise<void>;
+  (message: string, options: SentChatMessageOptions): Promise<void>;
+
+  // Custom messages
+  // (if SentMessageOptions<SentMessage> can be undefined, then options is optional, otherwise it is required)
+  <
+    Message extends SentMessage,
+    OptionalOptions extends SentMessageOptions<SentMessage> | undefined
+  >(message: Message): Promise<void>;
+  <Message extends SentMessage>(message: Message, options: SentMessageOptions<Message>): Promise<void>;
+};
+
 export type MessagesInstance = {
   [Symbol.toStringTag]: "MessagesInstance",
 
@@ -26,10 +40,7 @@ export type MessagesInstance = {
   /** Is a send operation currently in progress? */
   sendPending: boolean;
 
-  send: <Message extends SentMessage | string>(
-    message: Message,
-    options: Message extends SentMessage ? SentMessageOptions<Message> : SentChatMessageOptions,
-  ) => Promise<void>,
+  send: SendMessageFunction,
 
   /**
     * Create a ReceivedMessageAggregator, which allows one to view a snapshot of all received
@@ -57,7 +68,6 @@ export type MessagesCallbacks = {
   [MessagesEvent.MessageReceived]: (message: ReceivedMessage) => void;
   [MessagesEvent.Disconnected]: () => void;
 };
-
 
 export function createMessages(
   room: Room,
@@ -113,9 +123,9 @@ export function createMessages(
     set((old) => ({ ...old, subtle: { ...old.subtle, defaultMessageAggreggator: null } }));
   };
 
-  const sendMessage = async <Message extends SentMessage | string>(
+  const sendMessage: SendMessageFunction = async <Message extends SentMessage | string>(
     message: Message,
-    options: Message extends SentMessage ? SentMessageOptions<Message> : SentChatMessageOptions,
+    options?: Message extends SentMessage ? SentMessageOptions<Message> : SentChatMessageOptions,
   ) => {
     const messageSender = get().subtle.messageSender;
     if (!messageSender) {
