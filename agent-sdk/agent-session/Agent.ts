@@ -66,28 +66,33 @@ export function createAgent(
   const handleParticipantConnected = () => {
     updateParticipants();
   };
-  room.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
 
   const handleParticipantDisconnected = () => {
     updateParticipants();
   };
-  room.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
 
   const handleConnectionStateChanged = () => {
     updateConversationalState();
   };
-  room.on(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
 
   const handleLocalParticipantTrackPublished = () => {
     updateConversationalState();
   };
-  room.localParticipant.on(ParticipantEvent.TrackPublished, handleLocalParticipantTrackPublished)
 
   const initialize = () => {
     updateConversationalState();
+    updateParticipants();
+
+    room.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
+    room.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
+    room.on(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
+    room.localParticipant.on(ParticipantEvent.TrackPublished, handleLocalParticipantTrackPublished)
   };
 
   const teardown = () => {
+    updateConversationalState();
+    updateParticipants(); // Detaches any participant related event handlers
+
     room.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
     room.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
     room.off(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
