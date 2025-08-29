@@ -1,6 +1,6 @@
 import { Track } from 'livekit-client';
 import { AgentControlBar } from '@/components/livekit/agent-control-bar/agent-control-bar';
-import { DeviceSelect } from '@/components/livekit/device-select';
+// import { DeviceSelect } from '@/components/livekit/device-select';
 import { TrackToggle } from '@/components/livekit/track-toggle';
 import { Container } from '../Container';
 
@@ -15,11 +15,11 @@ export default function LiveKit() {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <h4 className="text-muted-foreground mb-2 font-mono text-xs uppercase">Size default</h4>
-            <DeviceSelect kind="audioinput" />
+            {/* <DeviceSelect kind="audioinput" /> */}
           </div>
           <div>
             <h4 className="text-muted-foreground mb-2 font-mono text-xs uppercase">Size sm</h4>
-            <DeviceSelect size="sm" kind="audioinput" />
+            {/* <DeviceSelect size="sm" kind="audioinput" /> */}
           </div>
         </div>
       </Container>
