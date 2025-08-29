@@ -416,7 +416,7 @@ export function createLocalTrack<TrackSource extends Track.Source>(
 
     subtle: {
       emitter,
-      publication: null,
+      publication: options.room.localParticipant.getTrackPublication(options.trackSource) ?? null,
       userChoices: loadUserChoices(),
     },
   };

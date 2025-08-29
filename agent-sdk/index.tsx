@@ -23,6 +23,10 @@ export const AgentVideoTrack: React.FunctionComponent<{
     }
     const mediaElement = mediaElementRef.current;
 
+    if (!track.enabled) {
+      return;
+    }
+
     let cleanup: (() => void) | null = null;
     (async () => {
       if (!track.isLocal) {
