@@ -23,6 +23,9 @@ export type MessagesInstance = {
 
   list: Array<ReceivedMessage>;
 
+  /** Is a send operation currently in progress? */
+  sendPending: boolean;
+
   send: <Message extends SentMessage | string>(
     message: Message,
     options: Message extends SentMessage ? SentMessageOptions<Message> : SentChatMessageOptions,
@@ -119,13 +122,19 @@ export function createMessages(
       throw new Error('AgentSession.sendMessage - cannot send message until room is connected and MessageSender initialized!');
     }
 
+    set((old) => ({ ...old, sendPending: true }));
+
     const constructedMessage: SentMessage = typeof message === 'string' ? {
       id: `${Math.random()}`, /* FIXME: fix id generation */
       direction: 'outbound',
       timestamp: new Date(),
       content: { type: 'chat', text: message },
     } : message;
-    await messageSender.send(constructedMessage, options);
+    try {
+      await messageSender.send(constructedMessage, options);
+    } finally {
+      set((old) => ({ ...old, sendPending: false }));
+    }
   };
 
   const createMessageAggregator = (options: ReceivedMessageAggregatorOptions = {}) => {
@@ -147,6 +156,7 @@ export function createMessages(
     [Symbol.toStringTag]: "MessagesInstance",
 
     list: [],
+    sendPending: false,
     send: sendMessage,
     createMessageAggregator,
 
