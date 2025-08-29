@@ -1,6 +1,6 @@
 import { ConnectionState, ParticipantEvent, ParticipantKind, RemoteParticipant, RemoteTrackPublication, Room, RoomEvent, Track } from 'livekit-client';
 import type TypedEventEmitter from 'typed-emitter';
-import { EventEmitter } from 'stream';
+import { EventEmitter } from 'events';
 import { getParticipantTrackRefs, participantTrackEvents, roomTrackEvents } from '@/agent-sdk/external-deps/components-js';
 import { ParticipantEventCallbacks, RoomEventCallbacks } from '@/agent-sdk/external-deps/client-sdk-js';
 import { ParticipantAttributes } from '@/agent-sdk/lib/participant-attributes';
