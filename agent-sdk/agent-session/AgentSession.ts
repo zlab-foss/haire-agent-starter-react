@@ -7,6 +7,7 @@ import { ConnectionCredentialsProvider } from './ConnectionCredentialsProvider';
 import { ParticipantAttributes } from '../lib/participant-attributes';
 import { createMessages, MessagesInstance } from './Messages';
 import { createLocal, LocalInstance } from './Local';
+import { createScopedGetSet } from '../lib/scoped-get-set';
 
 /** State representing the current connection status to the server hosted agent */
 // FIXME: maybe just make this ConnectionState?
@@ -77,18 +78,10 @@ export type SwitchActiveDeviceOptions = {
   exact?: boolean;
 };
 
-
-export type AgentSessionInstance = {
+type AgentSessionInstanceCommon = {
   [Symbol.toStringTag]: "AgentSessionInstance",
 
   credentials: ConnectionCredentialsProvider;
-
-  agent: AgentInstance | null;
-  local: LocalInstance | null;
-  messages: MessagesInstance | null;
-
-  connectionState: AgentSessionConnectionState;
-  isConnected: boolean;
 
   /** Returns a promise that resolves once the room connects. */
   waitUntilConnected: (signal?: AbortSignal) => void;
@@ -111,7 +104,39 @@ export type AgentSessionInstance = {
     emitter: TypedEventEmitter<AgentSessionCallbacks>;
     room: Room;
   };
-}
+};
+
+type AgentSessionInstanceConnected = AgentSessionInstanceCommon & {
+  connectionState: "connected";
+  isConnected: true;
+  isReconnecting: boolean;
+
+  agent: AgentInstance;
+  local: LocalInstance;
+  messages: MessagesInstance;
+};
+
+type AgentSessionInstanceReconnecting = AgentSessionInstanceCommon & {
+  connectionState: "reconnecting" | "signalReconnecting";
+  isConnected: true;
+  isReconnecting: true;
+
+  agent: AgentInstance;
+  local: LocalInstance;
+  messages: MessagesInstance;
+};
+
+type AgentSessionInstanceNotConnected = AgentSessionInstanceCommon & {
+  connectionState: "connecting" | "disconnected";
+  isConnected: false;
+  isReconnecting: false;
+
+  agent: null;
+  local: null;
+  messages: null;
+};
+
+export type AgentSessionInstance = AgentSessionInstanceConnected | AgentSessionInstanceReconnecting | AgentSessionInstanceNotConnected;
 
  /**
    * AgentSession represents a connection to a LiveKit Agent, providing abstractions to make 1:1
@@ -126,38 +151,25 @@ export function createAgentSession(
   const room = new Room();
 
   const handleAgentAttributesChanged = () => {
-    updateConnectionState();
+    set((old) => generateConnectionStateUpdate(old, old.agent, old.local, old.messages));
   };
 
   const handleRoomConnected = async () => {
     console.log('!! CONNECTED');
 
-    const agent = createAgent(
-      room,
-      () => get().agent!, // FIXME: handle null case better
-      (fn) => set((old) => ({ ...old, agent: fn(old.agent!) })),
-    );
+    const { get: agentGet, set: agentSet } = createScopedGetSet(get, set, 'agent');
+    const agent = createAgent(room, agentGet, agentSet);
     agent.subtle.emitter.on(AgentEvent.AgentAttributesChanged, handleAgentAttributesChanged);
-    // agent.on(AgentEvent.AgentConnectionStateChanged, this.handleAgentConnectionStateChanged);
-    // agent.on(AgentEvent.AgentConversationalStateChanged, this.handleAgentConversationalStateChanged);
-    set((old) => ({ ...old, agent }));
+
+    const { get: localGet, set: localSet } = createScopedGetSet(get, set, 'local');
+    const local = createLocal(room, localGet, localSet);
+
+    const { get: messagesGet, set: messagesSet } = createScopedGetSet(get, set, 'messages');
+    const messages = createMessages(room, messagesGet, messagesSet);
+
+    set((old) => generateConnectionStateUpdate(old, agent, local, messages));
     agent.subtle.initialize();
-    updateConnectionState();
-
-    const local = createLocal(
-      room,
-      () => get().local!, // FIXME: handle null case better
-      (fn) => set((old) => ({ ...old, local: fn(old.local!) })),
-    );
-    set((old) => ({ ...old, local }));
     local.subtle.initialize();
-
-    const messages = createMessages(
-      room,
-      () => get().messages!, // FIXME: handle null case better
-      (fn) => set((old) => ({ ...old, messages: fn(old.messages!) })),
-    );
-    set((old) => ({ ...old, messages }));
     messages.subtle.initialize();
 
     set((old) => {
@@ -185,13 +197,11 @@ export function createAgentSession(
     // old.subtle.agent?.off(AgentEvent.AgentConversationalStateChanged, this.handleAgentConversationalStateChanged);
     get().agent?.subtle.teardown();
     get().agent?.subtle.emitter.off(AgentEvent.AgentAttributesChanged, handleAgentAttributesChanged);
-    set((old) => ({ ...old, agent: null }));
 
     get().local?.subtle.teardown();
-    set((old) => ({ ...old, local: null }));
-
     get().messages?.subtle.teardown();
-    set((old) => ({ ...old, messages: null }));
+
+    set((old) => generateConnectionStateUpdate(old, null, null, null));
 
     set((old) => {
       if (old.agentConnectTimeout?.timeoutId) {
@@ -219,7 +229,7 @@ export function createAgentSession(
   room.on(RoomEvent.MediaDevicesError, handleMediaDevicesError);
 
   const handleConnectionStateChanged = () => {
-    updateConnectionState();
+    set((old) => generateConnectionStateUpdate(old, old.agent, old.local, old.messages));
   };
   room.on(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
 
@@ -333,52 +343,91 @@ export function createAgentSession(
     });
   };
 
-  const updateConnectionState = () => {
-    let newConnectionState: AgentSessionConnectionState;
-    const { connectionState, agent } = get();
-
+  const generateConnectionState = (agent: AgentInstance | null): AgentSessionConnectionState => {
     const roomConnectionState = room.state;
     if (roomConnectionState === ConnectionState.Disconnected) {
-      newConnectionState = 'disconnected';
+      return 'disconnected';
     } else if (
       roomConnectionState === ConnectionState.Connecting ||
       !agent?.subtle.agentParticipant ||
       !agent?.attributes[ParticipantAttributes.state]
     ) {
-      newConnectionState = 'connecting';
+      return 'connecting';
     } else {
-      newConnectionState = roomConnectionState;
-    }
-    console.log('!! CONNECTION STATE:', newConnectionState);
-
-    if (connectionState !== newConnectionState) {
-      set((old) => ({
-        ...old,
-        connectionState: newConnectionState,
-        ...generateDerivedConnectionStateValues(newConnectionState),
-      }));
-      emitter.emit(AgentSessionEvent.AgentConnectionStateChanged, newConnectionState);
+      return roomConnectionState;
     }
   };
-  const generateDerivedConnectionStateValues = (conversationalState: AgentSessionInstance["connectionState"]) => ({
+  const generateDerivedConnectionStateValues = <ConnectionState extends AgentSessionInstance["connectionState"]>(connectionState: ConnectionState) => ({
     isConnected: (
-      conversationalState === 'connected' ||
-      conversationalState === 'reconnecting' ||
-      conversationalState === 'signalReconnecting'
+      connectionState === 'connected' ||
+      connectionState === 'reconnecting' ||
+      connectionState === 'signalReconnecting'
     ),
+    isReconnecting: (
+      connectionState === 'reconnecting' ||
+      connectionState === 'signalReconnecting'
+    ),
+  } as {
+    isConnected: ConnectionState extends 'connected' | 'reconnecting' | 'signalReconnecting' ? true : false,
+    isReconnecting: ConnectionState extends 'reconnecting' | 'signalReconnecting' ? true : false,
   });
+
+  const generateConnectionStateUpdate = (
+    old: AgentSessionInstance,
+    agent: AgentInstance | null,
+    local: LocalInstance | null,
+    messages: MessagesInstance | null,
+  ): AgentSessionInstance => {
+    const newConnectionState = generateConnectionState(agent);
+
+    if (old.connectionState !== newConnectionState) {
+      emitter.emit(AgentSessionEvent.AgentConnectionStateChanged, newConnectionState);
+    }
+
+    switch (newConnectionState) {
+      case 'connected':
+      case 'reconnecting':
+      case 'signalReconnecting':
+        if (!local || !agent || !messages) {
+          throw new Error(`AgentSessionInstance.generateConnectionStateUpdate - attempted to transition to connection state ${newConnectionState}, but local / agent / messages not found.`);
+        }
+        return {
+          ...old,
+
+          connectionState: 'connected',
+          ...generateDerivedConnectionStateValues('connected'),
+
+          local,
+          agent,
+          messages,
+        };
+
+      default:
+        return {
+          ...old,
+
+          connectionState: newConnectionState,
+          ...generateDerivedConnectionStateValues(newConnectionState),
+
+          // Clear inner values if no longer connected
+          local: null,
+          agent: null,
+          messages: null,
+        };
+    }
+  };
 
   return {
     [Symbol.toStringTag]: "AgentSessionInstance",
 
     credentials: options.credentials,
 
+    connectionState: 'disconnected',
+    ...generateDerivedConnectionStateValues('disconnected'),
+
     agent: null,
     local: null,
     messages: null,
-
-    connectionState: 'disconnected',
-    ...generateDerivedConnectionStateValues('disconnected'),
 
     waitUntilConnected,
     waitUntilDisconnected,

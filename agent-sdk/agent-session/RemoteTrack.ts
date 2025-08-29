@@ -5,17 +5,26 @@ export type RemoteTrackInstance<TrackSource extends Track.Source> = {
   [Symbol.toStringTag]: "RemoteTrackInstance";
   isLocal: false,
 
+  /** Given a media element, properly plumb the media stream through to it so media can be shown / heard in the app. */
   attachToMediaElement: (element: TrackSource extends Track.Source.Microphone | Track.Source.ScreenShareAudio ? HTMLAudioElement : HTMLVideoElement) => () => void;
+
   setSubscribed: (subscribed: boolean) => void;
   waitUntilSubscribed: (signal?: AbortSignal) => Promise<void>;
   setEnabled: (enabled: boolean) => void;
   setVolume: (volume: number) => void;
-  // TODO: there is way more stuff that should be added here, this is just a stub currently
 
+  /** The type of track reprsented (ie, camera, microphone, screen share, etc) */
   source: TrackSource;
+
+  /** Is the track currently enabled? */
   enabled: boolean;
+
+  /** Is the track currently muted? */
   muted: boolean;
+
+  /** Is the app currently receiving data from the SFU for this track? */
   subscribed: boolean;
+
   dimensions: Track.Dimensions | null;
   orientation: 'landscape' | 'portrait' | null;
 
@@ -110,8 +119,8 @@ export function createRemoteTrack<TrackSource extends Track.Source>(
     // Set the orientation of the video track.
     // TODO: This does not handle changes in orientation after a track got published (e.g when rotating a phone camera from portrait to landscape).
     if (
-      typeof options.publication?.dimensions?.width === 'number' &&
-      typeof options.publication?.dimensions?.height === 'number'
+      typeof options.publication.dimensions?.width === 'number' &&
+      typeof options.publication.dimensions?.height === 'number'
     ) {
       orientation =
         options.publication.dimensions.width > options.publication.dimensions.height ? 'landscape' as const : 'portrait' as const;

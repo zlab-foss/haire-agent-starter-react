@@ -5,43 +5,37 @@ import { getParticipantTrackRefs, participantTrackEvents, roomTrackEvents } from
 import { ParticipantEventCallbacks, RoomEventCallbacks } from '@/agent-sdk/external-deps/client-sdk-js';
 import { ParticipantAttributes } from '@/agent-sdk/lib/participant-attributes';
 import { createRemoteTrack, RemoteTrackInstance } from './RemoteTrack';
+import { createScopedGetSet } from '../lib/scoped-get-set';
 
 /** State representing the current status of the agent, whether it is ready for speach, etc */
 export type AgentConversationalState = 'disconnected' | 'initializing' | 'idle' | 'listening' | 'thinking' | 'speaking';
 
 export enum AgentEvent {
-  VideoTrackChanged = 'videoTrackChanged',
-  AudioTrackChanged = 'audioTrackChanged',
+  CameraChanged = 'cameraChanged',
+  MicrophoneChanged = 'microphoneChanged',
   AgentAttributesChanged = 'agentAttributesChanged',
   AgentConversationalStateChanged = 'agentConversationalStateChanged',
 }
 
 export type AgentCallbacks = {
-  [AgentEvent.VideoTrackChanged]: (newTrack: RemoteTrackInstance<Track.Source.Camera> | null) => void;
-  [AgentEvent.AudioTrackChanged]: (newTrack: RemoteTrackInstance<Track.Source.Microphone> | null) => void;
+  [AgentEvent.CameraChanged]: (newTrack: RemoteTrackInstance<Track.Source.Camera> | null) => void;
+  [AgentEvent.MicrophoneChanged]: (newTrack: RemoteTrackInstance<Track.Source.Microphone> | null) => void;
   [AgentEvent.AgentAttributesChanged]: (newAttributes: Record<string, string>) => void;
   [AgentEvent.AgentConversationalStateChanged]: (newAgentConversationalState: AgentConversationalState) => void;
 };
 
 
+export type AgentAttributes = Record<string, string>;
 
 
-export type AgentInstance = {
+type AgentInstanceCommon = {
   [Symbol.toStringTag]: "AgentInstance";
-
-  conversationalState: AgentConversationalState;
-
-  /** Is the agent ready for user interaction? */
-  isAvailable: boolean;
 
   /** Returns a promise that resolves once the agent is available for interaction */
   waitUntilAvailable: (signal?: AbortSignal) => Promise<void>;
 
-  camera: RemoteTrackInstance<Track.Source.Camera> | null;
-  microphone: RemoteTrackInstance<Track.Source.Microphone> | null;
-
   // FIXME: maybe add some sort of schema to this?
-  attributes: Record<string, string>;
+  attributes: AgentAttributes;
 
   subtle: {
     emitter: TypedEventEmitter<AgentCallbacks>;
@@ -52,6 +46,28 @@ export type AgentInstance = {
     workerParticipant: RemoteParticipant | null;
   };
 };
+
+type AgentInstanceAvailable = AgentInstanceCommon & {
+  conversationalState: "listening" | "thinking" | "speaking";
+
+  /** Is the agent ready for user interaction? */
+  isAvailable: true;
+
+  camera: RemoteTrackInstance<Track.Source.Camera>;
+  microphone: RemoteTrackInstance<Track.Source.Microphone>;
+};
+
+type AgentInstanceUnAvailable = AgentInstanceCommon & {
+  conversationalState: "disconnected" | "initializing" | "idle";
+
+  /** Is the agent ready for user interaction? */
+  isAvailable: false;
+
+  camera: null;
+  microphone: null;
+};
+
+export type AgentInstance = AgentInstanceAvailable | AgentInstanceUnAvailable;
 
 /**
   * Agent encapculates all agent state, normalizing some quirks around how LiveKit Agents work.
@@ -72,16 +88,16 @@ export function createAgent(
   };
 
   const handleConnectionStateChanged = () => {
-    updateConversationalState();
+    set((old) => generateConversationalStateUpdate(old, old.camera, old.microphone));
   };
 
   const handleLocalParticipantTrackPublished = () => {
-    updateConversationalState();
+    set((old) => generateConversationalStateUpdate(old, old.camera, old.microphone));
   };
 
   const initialize = () => {
-    updateConversationalState();
     updateParticipants();
+    set((old) => generateConversationalStateUpdate(old, old.camera, old.microphone));
 
     room.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
     room.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
@@ -90,17 +106,15 @@ export function createAgent(
   };
 
   const teardown = () => {
-    updateConversationalState();
-    updateParticipants(); // Detaches any participant related event handlers
-
-    room.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
-    room.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
-    room.off(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
     room.localParticipant.off(ParticipantEvent.TrackPublished, handleLocalParticipantTrackPublished)
+    room.off(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
+    room.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
+    room.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
 
     get().camera?.subtle.teardown();
     get().microphone?.subtle.teardown();
-    set((old) => ({ ...old, camera: null, microphone: null }));
+    set((old) => generateConversationalStateUpdate(old, null, null));
+    updateParticipants(); // Detaches any participant related event handlers
   };
 
   const waitUntilAvailable = async (signal?: AbortSignal) => {
@@ -131,7 +145,7 @@ export function createAgent(
     set((old) => ({ ...old, attributes }));
     emitter.emit(AgentEvent.AgentAttributesChanged, attributes);
 
-    updateConversationalState();
+    set((old) => generateConversationalStateUpdate(old, old.camera, old.microphone));
   };
 
   const handleUpdateTracks = () => {
@@ -154,45 +168,33 @@ export function createAgent(
       agentTracks.find((t) => t.source === Track.Source.Camera) ??
       workerTracks.find((t) => t.source === Track.Source.Camera) ?? null
     );
-    if (oldCamera?.subtle.publication !== newVideoTrack?.publication) {
-      const camera = newVideoTrack ? (
-        createRemoteTrack(
-          {
-            publication: newVideoTrack.publication as RemoteTrackPublication,
-            participant: newVideoTrack.participant,
-          },
-          () => get().camera!,
-          (fn: (old: RemoteTrackInstance<Track.Source.Camera>) => RemoteTrackInstance<Track.Source.Camera>) => {
-            return set((old) => ({ ...old, camera: fn(old.camera!) }));
-          },
-        )
-      ) : null;
-      set((old) => ({ ...old, camera }));
-      camera?.subtle.initialize();
-      emitter.emit(AgentEvent.VideoTrackChanged, camera);
+    let camera: AgentInstance["camera"] = null;
+    if (oldCamera?.subtle.publication !== newVideoTrack?.publication && newVideoTrack) {
+      const { get: cameraGet, set: cameraSet } = createScopedGetSet(get, set, 'camera');
+      camera = createRemoteTrack({
+        publication: newVideoTrack.publication as RemoteTrackPublication,
+        participant: newVideoTrack.participant,
+      }, cameraGet, cameraSet);
+      camera.subtle.initialize();
     }
+    emitter.emit(AgentEvent.CameraChanged, camera);
 
     const newAudioTrack = (
       agentTracks.find((t) => t.source === Track.Source.Microphone) ??
       workerTracks.find((t) => t.source === Track.Source.Microphone) ?? null
     );
-    if (oldMicrophone?.subtle.publication !== newAudioTrack?.publication) {
-      const microphone = newAudioTrack ? (
-        createRemoteTrack(
-          {
-            publication: newAudioTrack.publication as RemoteTrackPublication,
-            participant: newAudioTrack.participant,
-          },
-          () => get().microphone!,
-          (fn: (old: RemoteTrackInstance<Track.Source.Microphone>) => RemoteTrackInstance<Track.Source.Microphone>) => {
-            return set((old) => ({ ...old, microphone: fn(old.microphone!) }));
-          },
-        )
-      ) : null;
-      set((old) => ({ ...old, microphone }));
-      microphone?.subtle.initialize();
-      emitter.emit(AgentEvent.AudioTrackChanged, microphone);
+    let microphone: AgentInstance["microphone"] = null;
+    if (oldMicrophone?.subtle.publication !== newVideoTrack?.publication && newAudioTrack) {
+      const { get: microphoneGet, set: microphoneSet } = createScopedGetSet(get, set, 'microphone');
+      microphone = createRemoteTrack({
+        publication: newAudioTrack.publication as RemoteTrackPublication,
+        participant: newAudioTrack.participant,
+      }, microphoneGet, microphoneSet);
+      microphone.subtle.initialize();
     }
+    emitter.emit(AgentEvent.MicrophoneChanged, microphone);
+
+    set((old) => generateConversationalStateUpdate(old, camera, microphone));
   };
 
   const updateParticipants = () => {
@@ -265,9 +267,8 @@ export function createAgent(
     }
   };
 
-  const updateConversationalState = () => {
+  const generateConversationalState = (attributes: AgentAttributes, agentParticipant: RemoteParticipant | null): AgentConversationalState => {
     let newConversationalState: AgentConversationalState = 'disconnected';
-    const { conversationalState, attributes, subtle: { agentParticipant } } = get();
 
     if (room.state !== ConnectionState.Disconnected) {
       newConversationalState = 'initializing';
@@ -286,24 +287,59 @@ export function createAgent(
       newConversationalState = agentState;
     }
 
-    console.log('!! CONVERSATIONAL STATE:', newConversationalState);
-
-    if (conversationalState !== newConversationalState) {
-      set((old) => ({
-        ...old,
-        conversationalState: newConversationalState,
-        ...generateDerivedConversationalStateValues(newConversationalState),
-      }));
-      emitter.emit(AgentEvent.AgentConversationalStateChanged, newConversationalState);
-    }
+    return newConversationalState;
   };
-  const generateDerivedConversationalStateValues = (conversationalState: AgentInstance["conversationalState"]) => ({
+  const generateDerivedConversationalStateValues = <ConversationalState extends AgentConversationalState>(conversationalState: ConversationalState) => ({
     isAvailable: (
       conversationalState === 'listening' ||
       conversationalState === 'thinking' ||
       conversationalState === 'speaking'
     ),
+  } as {
+    isAvailable: ConversationalState extends 'listening' | 'thinking' | 'speaking' ? true : false,
   });
+
+  const generateConversationalStateUpdate = (
+    old: AgentInstance,
+    camera: RemoteTrackInstance<Track.Source.Camera> | null,
+    microphone: RemoteTrackInstance<Track.Source.Microphone> | null,
+  ): AgentInstance => {
+    const newConversationalState = generateConversationalState(old.attributes, old.subtle.agentParticipant);
+
+    if (old.conversationalState !== newConversationalState) {
+      emitter.emit(AgentEvent.AgentConversationalStateChanged, newConversationalState);
+    }
+
+    switch (newConversationalState) {
+      case 'thinking':
+      case 'listening':
+      case 'speaking':
+        if (!camera || !microphone) {
+          throw new Error(`AgentInstance.generateConversationalStateUpdate - attempted to transition to conversational state ${newConversationalState}, but camera / microphone not found.`);
+        }
+        return {
+          ...old,
+
+          conversationalState: newConversationalState,
+          ...generateDerivedConversationalStateValues(newConversationalState),
+
+          camera,
+          microphone,
+        };
+
+      default:
+        return {
+          ...old,
+
+          conversationalState: newConversationalState,
+          ...generateDerivedConversationalStateValues(newConversationalState),
+
+          // Clear inner values if no longer connected
+          camera: null,
+          microphone: null,
+        };
+    }
+  };
 
   return {
     [Symbol.toStringTag]: "AgentInstance",
