@@ -119,7 +119,7 @@ export const AgentRoomAudioRenderer: React.FunctionComponent<{ agent: AgentInsta
   );
 };
 
-export const AgentStartAudio: React.FunctionComponent<{ className?: string, agentSession: AgentSessionInstance, label: string }> = ({ className, label = 'Allow Audio', agentSession }) => {
+export const AgentStartAudio: React.FunctionComponent<{ className?: string, agentSession: AgentSessionInstance, label?: string }> = ({ className, label = 'Allow Audio', agentSession }) => {
   return (
     <button
       className={className}
