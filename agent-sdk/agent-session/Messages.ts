@@ -1,5 +1,6 @@
 import type TypedEventEmitter from 'typed-emitter';
 import { Room } from 'livekit-client';
+import { EventEmitter } from "events";
 
 import {
   type ReceivedMessage,
@@ -59,8 +60,9 @@ export function createMessages(
   room: Room,
   get: () => MessagesInstance,
   set: (fn: (old: MessagesInstance) => MessagesInstance) => void,
-  emitter: TypedEventEmitter<MessagesCallbacks>,
 ): MessagesInstance {
+  const emitter = new EventEmitter() as TypedEventEmitter<MessagesCallbacks>;
+
   const handleIncomingMessage = (incomingMessage: ReceivedMessage) => {
     emitter.emit(MessagesEvent.MessageReceived, incomingMessage);
   };

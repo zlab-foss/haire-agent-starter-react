@@ -1,4 +1,5 @@
 import { LocalTrack, Room } from 'livekit-client';
+import { EventEmitter } from 'events';
 import type TypedEventEmitter from 'typed-emitter';
 import { AudioCaptureOptions, LocalTrackPublication, ParticipantEvent, ScreenShareCaptureOptions, Track, TrackPublishOptions, VideoCaptureOptions } from 'livekit-client';
 import { ParticipantEventCallbacks } from '@/agent-sdk/external-deps/client-sdk-js';
@@ -91,8 +92,9 @@ export function createLocalTrack<TrackSource extends Track.Source>(
   },
   get: () => LocalTrackInstance<TrackSource>,
   set: (fn: (old: LocalTrackInstance<TrackSource>) => LocalTrackInstance<TrackSource>) => void,
-  emitter: TypedEventEmitter<LocalTrackCallbacks<TrackSource>>,
 ): LocalTrackInstance<TrackSource> {
+  const emitter = new EventEmitter() as TypedEventEmitter<LocalTrackCallbacks<TrackSource>>;
+
   let mediaDeviceKind = null;
   switch (options.trackSource) {
     case Track.Source.Camera:

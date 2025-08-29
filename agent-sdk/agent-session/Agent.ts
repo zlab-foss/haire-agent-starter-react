@@ -4,6 +4,7 @@ import { getParticipantTrackRefs, participantTrackEvents, roomTrackEvents } from
 import { ParticipantEventCallbacks, RoomEventCallbacks } from '@/agent-sdk/external-deps/client-sdk-js';
 import { ParticipantAttributes } from '@/agent-sdk/lib/participant-attributes';
 import { createRemoteTrack, RemoteTrackInstance } from './RemoteTrack';
+import { EventEmitter } from 'stream';
 
 /** State representing the current status of the agent, whether it is ready for speach, etc */
 export type AgentConversationalState = 'disconnected' | 'initializing' | 'idle' | 'listening' | 'thinking' | 'speaking';
@@ -59,8 +60,9 @@ export function createAgent(
   room: Room,
   get: () => AgentInstance,
   set: (fn: (old: AgentInstance) => AgentInstance) => void,
-  emitter: TypedEventEmitter<AgentCallbacks>,
 ): AgentInstance {
+  const emitter = new EventEmitter() as TypedEventEmitter<AgentCallbacks>;
+
   const handleParticipantConnected = () => {
     updateParticipants();
   };

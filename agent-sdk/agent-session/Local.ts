@@ -48,8 +48,9 @@ export function createLocal(
   room: Room,
   get: () => LocalInstance,
   set: (fn: (old: LocalInstance) => LocalInstance) => void,
-  emitter: TypedEventEmitter<LocalCallbacks>,
 ): LocalInstance {
+  const emitter = new EventEmitter() as TypedEventEmitter<LocalCallbacks>;
+
   const handleParticipantPermissionsChanged = () => {
     const permissions = room.localParticipant.permissions ?? null;
 
@@ -76,7 +77,6 @@ export function createLocal(
 
   const initialize = () => {
     for (const [trackSource, key] of trackSourcesAndKeys) {
-      const emitter = new EventEmitter(); // FIXME: can I get rid of this?
       const track = createLocalTrack(
         {
           room,
@@ -85,7 +85,6 @@ export function createLocal(
         },
         () => get()[key]!, // FIXME: handle null case better
         (fn) => set((old) => ({ ...old, [key]: fn(old[key]!) })),
-        emitter as any,
       );
       // track.subtle.emitter.on(AgentEvent.AgentAttributesChanged, handleAgentAttributesChanged);
       set((old) => ({ ...old, [key]: track }));

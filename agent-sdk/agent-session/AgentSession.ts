@@ -1,5 +1,4 @@
 import type TypedEventEmitter from 'typed-emitter';
-import { EventEmitter } from "events";
 import { Room, RoomEvent, ConnectionState, TrackPublishOptions } from 'livekit-client';
 
 import {
@@ -147,12 +146,10 @@ export function createAgentSession(
   const handleRoomConnected = async () => {
     console.log('!! CONNECTED');
 
-    const agentEmitter = new EventEmitter(); // FIXME: can I get rid of this?
     const agent = createAgent(
       room,
       () => get().agent!, // FIXME: handle null case better
       (fn) => set((old) => ({ ...old, agent: fn(old.agent!) })),
-      agentEmitter as any,
     );
     agent.subtle.emitter.on(AgentEvent.AgentAttributesChanged, handleAgentAttributesChanged);
     // agent.on(AgentEvent.AgentConnectionStateChanged, this.handleAgentConnectionStateChanged);
@@ -161,22 +158,18 @@ export function createAgentSession(
     agent.initialize();
     updateConnectionState();
 
-    const localEmitter = new EventEmitter(); // FIXME: can I get rid of this?
     const local = createLocal(
       room,
       () => get().local!, // FIXME: handle null case better
       (fn) => set((old) => ({ ...old, local: fn(old.local!) })),
-      localEmitter as any,
     );
     set((old) => ({ ...old, local }));
     local.initialize();
 
-    const messagesEmitter = new EventEmitter(); // FIXME: can I get rid of this?
     const messages = createMessages(
       room,
       () => get().messages!, // FIXME: handle null case better
       (fn) => set((old) => ({ ...old, messages: fn(old.messages!) })),
-      messagesEmitter as any,
     );
     set((old) => ({ ...old, messages }));
     messages.initialize();
