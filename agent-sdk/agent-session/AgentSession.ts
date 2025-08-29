@@ -51,6 +51,10 @@ export type AgentSessionCallbacks = {
 };
 
 export type AgentSessionOptions = {
+  credentials: ConnectionCredentialsProvider;
+};
+
+export type AgentSessionConnectOptions = {
   /** Optional abort signal which if triggered will stop waiting for the room to be disconnected
     * prior to connecting
     *
@@ -112,7 +116,7 @@ export type AgentSessionInstance = {
   } | null,
 
   prepareConnection: () => Promise<void>,
-  connect: (options?: AgentSessionOptions) => Promise<void>;
+  connect: (options?: AgentSessionConnectOptions) => Promise<void>;
   disconnect: () => Promise<void>;
 
   canPlayAudio: boolean;
@@ -129,7 +133,7 @@ export type AgentSessionInstance = {
    * agent/participant rooms easier to work with.
    */
 export function createAgentSession(
-  options: { credentials: ConnectionCredentialsProvider },
+  options: AgentSessionOptions,
   get: () => AgentSessionInstance,
   set: (fn: (old: AgentSessionInstance) => AgentSessionInstance) => void,
   emitter: TypedEventEmitter<AgentSessionCallbacks>,
@@ -249,12 +253,14 @@ export function createAgentSession(
   room.on(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
 
 
-  const connect = async (connectOptions: AgentSessionOptions = {}) => {
+  const connect = async (connectOptions: AgentSessionConnectOptions = {}) => {
     const {
       waitForDisconnectSignal,
       agentConnectTimeoutMilliseconds = DEFAULT_AGENT_CONNECT_TIMEOUT_MILLISECONDS,
       tracks = { microphone: { enabled: true, publishOptions: { preConnectBuffer: true } } },
     } = connectOptions;
+
+    await waitUntilDisconnected(waitForDisconnectSignal);
 
     set((old) => ({
       ...old,
@@ -263,8 +269,6 @@ export function createAgentSession(
         timeoutId: null,
       },
     }));
-
-    await waitUntilDisconnected(waitForDisconnectSignal);
 
     const state = get();
     await Promise.all([
@@ -296,7 +300,7 @@ export function createAgentSession(
 
   const startAudio = async () => get().subtle.room.startAudio();
 
-  const startAgentConnectedTimeout = (agentConnectTimeoutMilliseconds: AgentSessionOptions["agentConnectTimeoutMilliseconds"] | null) => {
+  const startAgentConnectedTimeout = (agentConnectTimeoutMilliseconds: AgentSessionConnectOptions["agentConnectTimeoutMilliseconds"] | null) => {
     return setTimeout(() => {
       const { connectionState, agent, disconnect } = get();
       if (!agent?.isAvailable) {
