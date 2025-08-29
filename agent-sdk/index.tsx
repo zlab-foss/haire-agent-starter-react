@@ -3,10 +3,9 @@ import { useEffect, useCallback, useMemo, useRef } from "react";
 import { EventEmitter } from "events";
 import { create } from 'zustand';
 import { Participant, Track, TrackPublication } from "livekit-client";
-import { AgentSessionConnectionState, AgentSessionInstance, createAgentSession } from "./agent-session/AgentSession";
+import { AgentSessionConnectionState, AgentSessionInstance, AgentSessionOptions, createAgentSession } from "./agent-session/AgentSession";
 import { AgentInstance } from "./agent-session/Agent";
 import { RemoteTrackInstance } from "./agent-session/RemoteTrack";
-import { ManualConnectionCredentialsProvider } from "./agent-session/ConnectionCredentialsProvider";
 import TypedEventEmitter, { EventMap } from "typed-emitter";
 import { LocalTrackInstance } from "./agent-session/LocalTrack";
 import { AgentState, BarVisualizer, BarVisualizerProps, TrackReference } from "@livekit/components-react";
@@ -182,26 +181,8 @@ export const AgentBarVisualizer: React.FunctionComponent<
 
 
 const emitter = new EventEmitter();
-export const useAgentSession = create<AgentSessionInstance>((set, get) => {
-  return createAgentSession({
-    credentials: new ManualConnectionCredentialsProvider(async () => {
-      const url = new URL(
-        process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? '/api/connection-details',
-        window.location.origin
-      );
-
-      let data;
-      try {
-        const res = await fetch(url.toString());
-        data = await res.json();
-      } catch (error) {
-        console.error('Error fetching connection details:', error);
-        throw new Error('Error fetching connection details!');
-      }
-
-      return data;
-    }),
-  }, get, set, emitter as any);
+export const createUseAgentSession = (options: AgentSessionOptions) => create<AgentSessionInstance>((set, get) => {
+  return createAgentSession(options, get, set, emitter as any);
 });
 
 export function useAgentEvents<
