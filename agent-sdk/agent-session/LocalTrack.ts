@@ -44,9 +44,6 @@ export type LocalTrackInstance<TrackSource extends Track.Source> = {
   [Symbol.toStringTag]: "LocalTrackInstance";
   isLocal: true,
 
-  initialize: () => void;
-  teardown: () => void;
-
   /** The type of track reprsented (ie, camera, microphone, screen share, etc) */
   source: TrackSource;
 
@@ -78,6 +75,9 @@ export type LocalTrackInstance<TrackSource extends Track.Source> = {
 
   subtle: {
     emitter: TypedEventEmitter<LocalTrackCallbacks<TrackSource>>,
+    initialize: () => void;
+    teardown: () => void;
+
     publication: LocalTrackPublication | null,
     userChoices: LocalUserChoices,
   };
@@ -393,9 +393,6 @@ export function createLocalTrack<TrackSource extends Track.Source>(
     [Symbol.toStringTag]: "LocalTrackInstance",
     isLocal: true,
 
-    initialize,
-    teardown,
-
     source: options.trackSource,
     enabled: false,
     pending: false,
@@ -417,6 +414,9 @@ export function createLocalTrack<TrackSource extends Track.Source>(
 
     subtle: {
       emitter,
+      initialize,
+      teardown,
+
       publication: options.room.localParticipant.getTrackPublication(options.trackSource) ?? null,
       userChoices: loadUserChoices(),
     },

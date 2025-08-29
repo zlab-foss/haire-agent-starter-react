@@ -141,7 +141,7 @@ export function createAgentSession(
     // agent.on(AgentEvent.AgentConnectionStateChanged, this.handleAgentConnectionStateChanged);
     // agent.on(AgentEvent.AgentConversationalStateChanged, this.handleAgentConversationalStateChanged);
     set((old) => ({ ...old, agent }));
-    agent.initialize();
+    agent.subtle.initialize();
     updateConnectionState();
 
     const local = createLocal(
@@ -150,7 +150,7 @@ export function createAgentSession(
       (fn) => set((old) => ({ ...old, local: fn(old.local!) })),
     );
     set((old) => ({ ...old, local }));
-    local.initialize();
+    local.subtle.initialize();
 
     const messages = createMessages(
       room,
@@ -158,7 +158,7 @@ export function createAgentSession(
       (fn) => set((old) => ({ ...old, messages: fn(old.messages!) })),
     );
     set((old) => ({ ...old, messages }));
-    messages.initialize();
+    messages.subtle.initialize();
 
     set((old) => {
       if (!old.agentConnectTimeout) {
@@ -183,14 +183,14 @@ export function createAgentSession(
     console.log('!! DISCONNECTED');
     // old.subtle.agent?.off(AgentEvent.AgentConnectionStateChanged, this.handleAgentConnectionStateChanged);
     // old.subtle.agent?.off(AgentEvent.AgentConversationalStateChanged, this.handleAgentConversationalStateChanged);
-    get().agent?.teardown();
+    get().agent?.subtle.teardown();
     get().agent?.subtle.emitter.off(AgentEvent.AgentAttributesChanged, handleAgentAttributesChanged);
     set((old) => ({ ...old, agent: null }));
 
-    get().local?.teardown();
+    get().local?.subtle.teardown();
     set((old) => ({ ...old, local: null }));
 
-    get().messages?.teardown();
+    get().messages?.subtle.teardown();
     set((old) => ({ ...old, messages: null }));
 
     set((old) => {

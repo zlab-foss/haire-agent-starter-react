@@ -23,9 +23,6 @@ const trackSourcesAndKeys = [
 export type LocalInstance = {
   [Symbol.toStringTag]: "LocalInstance";
 
-  initialize: () => void;
-  teardown: () => void;
-
   permissions: ParticipantPermission | null;
   publishPermissions: {
     camera: boolean | null;
@@ -40,6 +37,9 @@ export type LocalInstance = {
 
   subtle: {
     emitter: TypedEventEmitter<LocalCallbacks>;
+    initialize: () => void;
+    teardown: () => void;
+
     localParticipant: LocalParticipant;
   };
 };
@@ -88,7 +88,7 @@ export function createLocal(
       );
       // track.subtle.emitter.on(AgentEvent.AgentAttributesChanged, handleAgentAttributesChanged);
       set((old) => ({ ...old, [key]: track }));
-      track.initialize();
+      track.subtle.initialize();
     }
 
     room.on(RoomEvent.ParticipantPermissionsChanged, handleParticipantPermissionsChanged);
@@ -98,16 +98,13 @@ export function createLocal(
     room.localParticipant.off(ParticipantEvent.ParticipantPermissionsChanged, handleParticipantPermissionsChanged);
 
     for (const [_trackSource, key] of trackSourcesAndKeys) {
-      get()[key]?.teardown();
+      get()[key]?.subtle.teardown();
       set((old) => ({ ...old, [key]: null }));
     };
   };
 
   return {
     [Symbol.toStringTag]: "LocalInstance",
-
-    initialize,
-    teardown,
 
     permissions: room.localParticipant.permissions ?? null,
     publishPermissions: {
@@ -123,6 +120,9 @@ export function createLocal(
 
     subtle: {
       emitter,
+      initialize,
+      teardown,
+
       localParticipant: room.localParticipant,
     },
   };

@@ -29,9 +29,6 @@ export type AgentCallbacks = {
 export type AgentInstance = {
   [Symbol.toStringTag]: "AgentInstance";
 
-  initialize: () => void;
-  teardown: () => void;
-
   conversationalState: AgentConversationalState;
 
   /** Is the agent ready for user interaction? */
@@ -48,6 +45,9 @@ export type AgentInstance = {
 
   subtle: {
     emitter: TypedEventEmitter<AgentCallbacks>;
+    initialize: () => void;
+    teardown: () => void;
+
     agentParticipant: RemoteParticipant | null;
     workerParticipant: RemoteParticipant | null;
   };
@@ -93,8 +93,8 @@ export function createAgent(
     room.off(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
     room.localParticipant.off(ParticipantEvent.TrackPublished, handleLocalParticipantTrackPublished)
 
-    get().camera?.teardown();
-    get().microphone?.teardown();
+    get().camera?.subtle.teardown();
+    get().microphone?.subtle.teardown();
     set((old) => ({ ...old, camera: null, microphone: null }));
   };
 
@@ -163,7 +163,7 @@ export function createAgent(
         )
       ) : null;
       set((old) => ({ ...old, camera }));
-      camera?.initialize();
+      camera?.subtle.initialize();
       emitter.emit(AgentEvent.VideoTrackChanged, camera);
     }
 
@@ -185,7 +185,7 @@ export function createAgent(
         )
       ) : null;
       set((old) => ({ ...old, microphone }));
-      microphone?.initialize();
+      microphone?.subtle.initialize();
       emitter.emit(AgentEvent.AudioTrackChanged, microphone);
     }
   };
@@ -303,9 +303,6 @@ export function createAgent(
   return {
     [Symbol.toStringTag]: "AgentInstance",
 
-    initialize,
-    teardown,
-
     conversationalState: 'disconnected',
     ...generateDerivedConversationalStateValues('disconnected'),
 
@@ -318,6 +315,9 @@ export function createAgent(
 
     subtle: {
       emitter,
+      initialize,
+      teardown,
+
       agentParticipant: null,
       workerParticipant: null,
     },

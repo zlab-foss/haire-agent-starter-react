@@ -5,9 +5,6 @@ export type RemoteTrackInstance<TrackSource extends Track.Source> = {
   [Symbol.toStringTag]: "RemoteTrackInstance";
   isLocal: false,
 
-  initialize: () => void;
-  teardown: () => void;
-
   attachToMediaElement: (element: TrackSource extends Track.Source.Microphone | Track.Source.ScreenShareAudio ? HTMLAudioElement : HTMLVideoElement) => () => void;
   setSubscribed: (subscribed: boolean) => void;
   waitUntilSubscribed: (signal?: AbortSignal) => Promise<void>;
@@ -23,6 +20,8 @@ export type RemoteTrackInstance<TrackSource extends Track.Source> = {
   orientation: 'landscape' | 'portrait' | null;
 
   subtle: {
+    initialize: () => void;
+    teardown: () => void;
     publication: RemoteTrackPublication,
   };
 };
@@ -152,9 +151,6 @@ export function createRemoteTrack<TrackSource extends Track.Source>(
     setEnabled,
     setVolume,
 
-    initialize,
-    teardown,
-
     source: options.publication.source as TrackSource,
     enabled: false,
     muted: false,
@@ -163,6 +159,9 @@ export function createRemoteTrack<TrackSource extends Track.Source>(
     orientation: null,
 
     subtle: {
+      initialize,
+      teardown,
+
       publication: options.publication,
     },
   };

@@ -48,11 +48,11 @@ export type MessagesInstance = {
     */
   createMessageAggregator: (options?: ReceivedMessageAggregatorOptions) => ReceivedMessageAggregator<ReceivedMessage>;
 
-  initialize: () => void;
-  teardown: () => void;
-
   subtle: {
     emitter: TypedEventEmitter<MessagesCallbacks>;
+    initialize: () => void;
+    teardown: () => void;
+
     messageSender: MessageSender | null;
     messageReceiver: MessageReceiver | null;
     defaultMessageAggreggator: ReceivedMessageAggregator<ReceivedMessage> | null;
@@ -170,11 +170,11 @@ export function createMessages(
     send: sendMessage,
     createMessageAggregator,
 
-    initialize,
-    teardown,
-
     subtle: {
       emitter,
+      initialize,
+      teardown,
+
       messageSender: null,
       messageReceiver: null,
       defaultMessageAggreggator: null,
