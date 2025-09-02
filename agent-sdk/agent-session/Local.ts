@@ -86,30 +86,26 @@ export function createLocal(
     get().screenShare.subtle.teardown();
   };
 
-  const generateTracks = () => {
-    const { get: trackGet, set: trackSet } = createScopedGetSet(get, set, 'camera', 'LocalTrack');
-    const camera = createLocalTrack({
-      room,
-      trackSource: Track.Source.Camera,
-      preventUserChoicesSave: false,
-    }, trackGet, trackSet);
+  const { get: trackGet, set: trackSet } = createScopedGetSet(get, set, 'camera', 'LocalTrack');
+  const camera = createLocalTrack({
+    room,
+    trackSource: Track.Source.Camera,
+    preventUserChoicesSave: false,
+  }, trackGet, trackSet);
 
-    const { get: microphoneTrackGet, set: microphoneTrackSet } = createScopedGetSet(get, set, 'microphone', 'LocalTrack');
-    const microphone = createLocalTrack({
-      room,
-      trackSource: Track.Source.Microphone,
-      preventUserChoicesSave: false,
-    }, microphoneTrackGet, microphoneTrackSet);
+  const { get: microphoneTrackGet, set: microphoneTrackSet } = createScopedGetSet(get, set, 'microphone', 'LocalTrack');
+  const microphone = createLocalTrack({
+    room,
+    trackSource: Track.Source.Microphone,
+    preventUserChoicesSave: false,
+  }, microphoneTrackGet, microphoneTrackSet);
 
-    const { get: screenShareTrackGet, set: screenShareTrackSet } = createScopedGetSet(get, set, 'screenShare', 'LocalTrack');
-    const screenShare = createLocalTrack({
-      room,
-      trackSource: Track.Source.ScreenShare,
-      preventUserChoicesSave: false,
-    }, screenShareTrackGet, screenShareTrackSet);
-
-    return { camera, microphone, screenShare };
-  };
+  const { get: screenShareTrackGet, set: screenShareTrackSet } = createScopedGetSet(get, set, 'screenShare', 'LocalTrack');
+  const screenShare = createLocalTrack({
+    room,
+    trackSource: Track.Source.ScreenShare,
+    preventUserChoicesSave: false,
+  }, screenShareTrackGet, screenShareTrackSet);
 
   return {
     [Symbol.toStringTag]: "LocalInstance",
@@ -122,7 +118,9 @@ export function createLocal(
       data: false,
     },
 
-    ...generateTracks(),
+    camera,
+    microphone,
+    screenShare,
 
     subtle: {
       emitter,
