@@ -465,7 +465,7 @@ export function createAgentSession(
     connect,
     disconnect,
 
-    canPlayAudio: false,
+    canPlayAudio: room.canPlaybackAudio,
     startAudio,
 
     subtle: {
