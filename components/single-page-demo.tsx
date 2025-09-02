@@ -43,6 +43,11 @@ export default function SinglePageDemo() {
     };
   }, [started]);
 
+  const [writeToConsole, setWriteToConsole] = useState(false);
+  if (writeToConsole) {
+    (window as any).agentSession = agentSession;
+  }
+
   return (
     <div className="flex flex-col gap-4 p-4">
       <div className="flex items-center gap-4">
@@ -53,21 +58,18 @@ export default function SinglePageDemo() {
           <strong className="mr-1">Statuses:</strong>
           {agentSession.connectionState} / {agentSession.agent?.conversationalState ?? 'N/A'}
         </span>
-        <Button variant="outline" onClick={() => {
-          (window as any).agentSession = agentSession;
-          console.log('agentSession written to window.agentSession');
-        }}>
-          Write to console
+        <Button variant={writeToConsole ? "primary" : "outline"} onClick={() => setWriteToConsole(c => !c)}>
+          {writeToConsole ? "Stop write to console" : "Write to console"}
         </Button>
       </div>
 
       {agentSession.isConnected ? (
         <>
           <div className="border rounded bg-muted p-2">
-            <Button onClick={() => agentSession.local.camera?.toggle?.()}>
+            <Button onClick={() => agentSession.local.camera.toggle()}>
               {agentSession.local.camera.enabled ? 'Disable' : 'Enable'} local camera
             </Button>
-            <Button onClick={() => agentSession.local?.microphone?.toggle?.()}>
+            <Button onClick={() => agentSession.local.microphone.toggle()}>
               {agentSession.local.microphone.enabled ? 'Mute' : 'Un mute'} local microphone
             </Button>
             <div>
