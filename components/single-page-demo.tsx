@@ -44,41 +44,66 @@ export default function SinglePageDemo() {
   }, [started]);
 
   return (
-    <div>
-      <div>
-        Statuses: {agentSession.connectionState} / {agentSession.agent?.conversationalState ?? 'N/A'}
+    <div className="flex flex-col gap-4 p-4">
+      <div className="flex items-center gap-4">
+        <Button variant="primary" onClick={() => setStarted(s => !s)} disabled={agentSession.connectionState === 'connecting'}>
+          {agentSession.isConnected ? 'Disconnect' : 'Connect'}
+        </Button>
+        <span>
+          <strong className="mr-1">Statuses:</strong>
+          {agentSession.connectionState} / {agentSession.agent?.conversationalState ?? 'N/A'}
+        </span>
+        <Button variant="outline" onClick={() => {
+          (window as any).agentSession = agentSession;
+          console.log('agentSession written to window.agentSession');
+        }}>
+          Write to console
+        </Button>
       </div>
-      <Button variant="primary" onClick={() => setStarted(s => !s)} disabled={agentSession.connectionState === 'connecting'}>
-        {agentSession.isConnected ? 'Disconnect' : 'Connect'}
-      </Button>
 
       {agentSession.isConnected ? (
-        <div>
-          <Button onClick={() => agentSession.local.camera?.toggle?.()}>
-            {agentSession.local.camera.enabled ? 'Disable' : 'Enable'} local camera
-          </Button>
-          <Button onClick={() => agentSession.local?.microphone?.toggle?.()}>
-            {agentSession.local.microphone.enabled ? 'Mute' : 'Un mute'} local microphone
-          </Button>
-          <div>
-            <p>Local microphone sources:</p>
-            {agentSession.local.microphone.devices.list.map(item => (
-              <li
-                key={item.deviceId}
-                onClick={() => agentSession.local.microphone.devices.changeActive(item.deviceId)}
-                style={{ color: item.deviceId === agentSession.local.microphone.devices.activeId ? 'red' : undefined }}
-              >
-                {item.label}
-              </li>
-            ))}
+        <>
+          <div className="border rounded bg-muted p-2">
+            <Button onClick={() => agentSession.local.camera?.toggle?.()}>
+              {agentSession.local.camera.enabled ? 'Disable' : 'Enable'} local camera
+            </Button>
+            <Button onClick={() => agentSession.local?.microphone?.toggle?.()}>
+              {agentSession.local.microphone.enabled ? 'Mute' : 'Un mute'} local microphone
+            </Button>
+            <div>
+              <p>Local camera sources:</p>
+              {agentSession.local.camera.devices.list.map(item => (
+                <li
+                  key={item.deviceId}
+                  onClick={() => agentSession.local.camera.devices.changeActive(item.deviceId)}
+                  style={{ color: item.deviceId === agentSession.local.camera.devices.activeId ? 'red' : undefined }}
+                >
+                  {item.label}
+                </li>
+              ))}
+            </div>
+            <div>
+              <p>Local microphone sources:</p>
+              {agentSession.local.microphone.devices.list.map(item => (
+                <li
+                  key={item.deviceId}
+                  onClick={() => agentSession.local.microphone.devices.changeActive(item.deviceId)}
+                  style={{ color: item.deviceId === agentSession.local.microphone.devices.activeId ? 'red' : undefined }}
+                >
+                  {item.label}
+                </li>
+              ))}
+            </div>
           </div>
 
-          {agentSession.local.camera ? (
-            <AgentVideoTrack track={agentSession.local.camera} />
-          ) : null}
-          {agentSession.agent.camera ? (
-            <AgentVideoTrack track={agentSession.agent.camera} />
-          ) : null}
+          <div>
+            {agentSession.local.camera ? (
+              <AgentVideoTrack track={agentSession.local.camera} />
+            ) : null}
+            {agentSession.agent.camera ? (
+              <AgentVideoTrack track={agentSession.agent.camera} />
+            ) : null}
+          </div>
 
           <ul>
             {agentSession.messages.list.map(message => (
@@ -96,7 +121,7 @@ export default function SinglePageDemo() {
               }}>Send</Button>
             </li>
           </ul>
-        </div>
+        </>
       ) : null}
 
       <AgentStartAudio agentSession={agentSession} />
