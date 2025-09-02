@@ -56,10 +56,10 @@ export function AgentControlBar({
   const [isDisconnecting, setIsDisconnecting] = React.useState(false);
 
   const visibleControls = {
-    microphone: controls?.microphone ?? local?.publishPermissions.microphone ?? false,
-    screenShare: controls?.screenShare ?? local?.publishPermissions.screenShare ?? false,
-    chat: controls?.chat ?? local?.publishPermissions.data ?? false,
-    camera: controls?.camera ?? local?.publishPermissions.camera ?? false,
+    microphone: local?.publishPermissions.microphone ?? controls?.microphone ?? false,
+    screenShare: local?.publishPermissions.screenShare ?? controls?.screenShare ?? false,
+    chat: local?.publishPermissions.data ?? controls?.chat ?? false,
+    camera: local?.publishPermissions.camera ?? controls?.camera ?? false,
     leave: true,
   };
 
