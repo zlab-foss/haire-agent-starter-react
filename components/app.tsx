@@ -19,7 +19,7 @@ interface AppProps {
 
 export function App({ appConfig }: AppProps) {
   const agentSession = useAgentSession();
-  (window as any).foo = agentSession;
+  // (window as any).foo = agentSession;
 
   const [sessionStarted, setSessionStarted] = useState(false);
 
