@@ -3,6 +3,7 @@ import { LocalParticipant } from "livekit-client";
 import { SentMessage, SentMessageOptions, type ReceivedChatLoopbackMessage, type SentChatMessage } from "..";
 import MessageSender from "./MessageSender";
 import MessageReceiver from "../receive/MessageReceiver";
+import { DataTopic } from "@/agent-sdk/external-deps/components-js";
 
 
 /** A `MessageSender` for sending chat messages via the `lk.chat` datastream topic. */
@@ -23,9 +24,12 @@ export default class ChatMessageSender extends MessageSender {
     if (!this.isSentChatMessage(message)) {
       return;
     }
-    // FIXME: maybe there's a more elegant way of doing this, where it also
-    // gets checked as part of `isSentChatMessage`?
-    const chatMessageOptions = options as SentMessageOptions<typeof message>;
+    const chatMessageOptions = {
+      // FIXME: maybe there's a more elegant way of doing this, where it also
+      // gets checked as part of `isSentChatMessage`?
+      ...options as SentMessageOptions<typeof message>,
+      topic: DataTopic.CHAT,
+    };
 
     for (const callback of this.loopbackReceiverCallbacks) {
       callback(message);
