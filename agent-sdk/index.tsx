@@ -185,9 +185,8 @@ export const AgentBarVisualizer: React.FunctionComponent<
 };
 
 
-const emitter = new EventEmitter();
 export const createUseAgentSession = (options: AgentSessionOptions) => create<AgentSessionInstance>((set, get) => {
-  return createAgentSession(options, get, set, emitter as any);
+  return createAgentSession(options, get, set);
 });
 
 export function useAgentEvents<

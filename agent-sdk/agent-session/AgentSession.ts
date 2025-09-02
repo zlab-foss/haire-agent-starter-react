@@ -1,5 +1,6 @@
 import type TypedEventEmitter from 'typed-emitter';
 import { Room, RoomEvent, ConnectionState, TrackPublishOptions } from 'livekit-client';
+import { EventEmitter } from 'events';
 
 import { type ReceivedMessage } from "./message";
 import { AgentConversationalState, AgentEvent, AgentInstance, createAgent } from './Agent';
@@ -146,8 +147,8 @@ export function createAgentSession(
   options: AgentSessionOptions,
   get: () => AgentSessionInstance,
   set: (fn: (old: AgentSessionInstance) => AgentSessionInstance) => void,
-  emitter: TypedEventEmitter<AgentSessionCallbacks>,
 ): AgentSessionInstance {
+  const emitter = new EventEmitter() as TypedEventEmitter<AgentSessionCallbacks>;
   const room = new Room();
 
   const handleAgentAttributesChanged = () => {
