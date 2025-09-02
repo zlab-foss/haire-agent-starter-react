@@ -34,6 +34,12 @@ type AgentInstanceCommon = {
   /** Returns a promise that resolves once the agent is available for interaction */
   waitUntilAvailable: (signal?: AbortSignal) => Promise<void>;
 
+  /** Returns a promise that resolves once the agent has published a camera track */
+  waitUntilCamera: (signal?: AbortSignal) => Promise<void>;
+
+  /** Returns a promise that resolves once the agent has published a microphone track */
+  waitUntilMicrophone: (signal?: AbortSignal) => Promise<void>;
+
   // FIXME: maybe add some sort of schema to this?
   attributes: AgentAttributes;
 
@@ -142,6 +148,46 @@ export function createAgent(
       signal?.addEventListener('abort', abortHandler);
     });
   };
+
+  const waitUntilMediaTrack = async (trackType: 'camera' | 'microphone', signal?: AbortSignal) => {
+    return new Promise<void>((resolve, reject) => {
+      const stateChangedHandler = () => {
+        if (!get()[trackType]) {
+          return;
+        }
+        cleanup();
+        resolve();
+      };
+      const abortHandler = () => {
+        cleanup();
+        reject(new Error('AgentInstance.waitUntilMediaTrack - signal aborted'));
+      };
+
+      const cleanup = () => {
+        switch (trackType) {
+          case 'camera':
+            emitter.off(AgentEvent.CameraChanged, stateChangedHandler);
+            break;
+          case 'microphone':
+            emitter.off(AgentEvent.MicrophoneChanged, stateChangedHandler);
+            break;
+        }
+        signal?.removeEventListener('abort', abortHandler);
+      };
+
+      switch (trackType) {
+        case 'camera':
+          emitter.on(AgentEvent.CameraChanged, stateChangedHandler);
+          break;
+        case 'microphone':
+          emitter.on(AgentEvent.MicrophoneChanged, stateChangedHandler);
+          break;
+      }
+      signal?.addEventListener('abort', abortHandler);
+    });
+  };
+  const waitUntilCamera = (signal?: AbortSignal) => waitUntilMediaTrack('camera', signal);
+  const waitUntilMicrophone = (signal?: AbortSignal) => waitUntilMediaTrack('microphone', signal);
 
   const handleAttributesChanged = (attributes: Record<string, string>) => {
     set((old) => ({ ...old, attributes }));
@@ -376,6 +422,8 @@ export function createAgent(
     ...generateDerivedConversationalStateValues('disconnected'),
 
     waitUntilAvailable,
+    waitUntilCamera,
+    waitUntilMicrophone,
 
     microphone: null,
     camera: null,
