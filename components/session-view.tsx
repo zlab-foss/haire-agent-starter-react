@@ -34,13 +34,7 @@ export const SessionView = ({
   useDebugMode({ session });
 
   async function handleSendMessage(message: string) {
-    // FIXME: add some sort of builder for SentMessage here so it's not just a raw object?
-    await send?.({
-      id: `${Math.random()}`, /* FIXME: fix id generation */
-      direction: 'outbound',
-      timestamp: new Date(),
-      content: { type: 'chat', text: message },
-    });
+    await send?.(message);
   }
 
   useAgentEvents(session, AgentSessionEvent.AgentConnectionFailure, (reason: string) => {

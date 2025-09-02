@@ -2,6 +2,7 @@ import type TypedEventEmitter from 'typed-emitter';
 import { Room } from 'livekit-client';
 import { EventEmitter } from "events";
 
+import { generateId } from '../lib/uuid';
 import {
   type ReceivedMessage,
   type SentMessage,
@@ -135,7 +136,7 @@ export function createMessages(
     set((old) => ({ ...old, sendPending: true }));
 
     const constructedMessage: SentMessage = typeof message === 'string' ? {
-      id: `${Math.random()}`, /* FIXME: fix id generation */
+      id: generateId(),
       direction: 'outbound',
       timestamp: new Date(),
       content: { type: 'chat', text: message },
