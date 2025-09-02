@@ -7,12 +7,12 @@ import { ParticipantPermission } from 'livekit-server-sdk';
 import { trackSourceToProtocol } from '../external-deps/components-js';
 import { createScopedGetSet } from '../lib/scoped-get-set';
 
-export enum LocalTrackEvent {
-  // PendingDisabled = 'pendingDisabled',
+export enum LocalEvent {
+  PermissionsChanged = 'permissionsChanged',
 };
 
 export type LocalCallbacks = {
-  // [LocalTrackEvent.PendingDisabled]: () => void;
+  [LocalEvent.PermissionsChanged]: (permissions: ParticipantPermission | null) => void;
 };
 
 export type LocalInstance = {
@@ -67,7 +67,8 @@ export function createLocal(
         data: permissions?.canPublishData ?? false,
       },
     }));
-    // FIXME: add event?
+
+    emitter.emit(LocalEvent.PermissionsChanged, permissions);
   };
 
   const initialize = () => {
