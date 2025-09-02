@@ -49,14 +49,18 @@ export function DeviceSelect({
   useAgentEvents(track, LocalTrackEvent.ActiveDeviceChangeError, onDeviceSelectError);
 
   return (
-    <Select value={track?.devices?.activeId} onValueChange={track?.devices?.changeActive}>
+    <Select
+      value={track?.devices?.activeId}
+      onValueChange={track?.devices?.changeActive}
+      disabled={track.devices.list.length === 0}
+    >
       <SelectTrigger className={cn(selectVariants({ size }), props.className)}>
         {size !== 'sm' && (
           <SelectValue className="font-mono text-sm" placeholder={`Select a ${track?.devices?.kind}`} />
         )}
       </SelectTrigger>
       <SelectContent>
-        {track?.devices?.list?.map((device) => (
+        {track.devices.list.map((device) => (
           <SelectItem key={device.deviceId} value={device.deviceId} className="font-mono text-xs">
             {device.label}
           </SelectItem>

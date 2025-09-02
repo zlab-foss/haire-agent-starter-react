@@ -1,4 +1,4 @@
-import { LocalTrack, Room } from 'livekit-client';
+import { LocalTrack, Room, RoomEvent } from 'livekit-client';
 import { EventEmitter } from 'events';
 import type TypedEventEmitter from 'typed-emitter';
 import { AudioCaptureOptions, LocalTrackPublication, ParticipantEvent, ScreenShareCaptureOptions, Track, TrackPublishOptions, VideoCaptureOptions } from 'livekit-client';
@@ -163,6 +163,11 @@ export function createLocalTrack<TrackSource extends Track.Source>(
       }
       navigator?.mediaDevices?.addEventListener('devicechange', handleDeviceChange);
     }
+    // When the device changes, refetch devices
+    // This is required because if a user activates a device for the first time, this is what causes
+    // the permission check to occur and after permissions have been granted, the devices list may
+    // now return a non empty list
+    options.room.on(RoomEvent.ActiveDeviceChanged, handleDeviceChange);
   };
 
   const teardown = () => {
@@ -172,6 +177,7 @@ export function createLocalTrack<TrackSource extends Track.Source>(
 
     if (mediaDeviceKind !== null) {
       navigator?.mediaDevices?.removeEventListener('devicechange', handleDeviceChange);
+      options.room.off(RoomEvent.ActiveDeviceChanged, handleDeviceChange);
     }
   };
 
@@ -325,12 +331,13 @@ export function createLocalTrack<TrackSource extends Track.Source>(
     return newCurrentDeviceId;
   };
 
-  const listDevices = (requestPermissions = true) => {
+  const listDevices = async (requestPermissions = false) => {
     if (!mediaDeviceKind) {
       throw new Error(`LocalTrackInstance.devices.list - Unable to list devices for track source ${options.trackSource}.`);
     }
 
-    return Room.getLocalDevices(mediaDeviceKind, requestPermissions);
+    const devices = await Room.getLocalDevices(mediaDeviceKind, requestPermissions);
+    return devices.filter(d => d.deviceId !== '');
   };
 
   const handleDeviceChange = async () => {
