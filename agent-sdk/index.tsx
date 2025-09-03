@@ -1,6 +1,5 @@
 import * as React from "react";
 import { useEffect, useCallback, useMemo, useRef } from "react";
-import { EventEmitter } from "events";
 import { create } from 'zustand';
 import { Participant, Track, TrackPublication } from "livekit-client";
 import { AgentSessionConnectionState, AgentSessionInstance, AgentSessionOptions, createAgentSession } from "./agent-session/AgentSession";
@@ -195,7 +194,7 @@ export function useAgentEvents<
   Event extends Parameters<Emitter["on"]>[0],
   Callback extends EmitterEventMap[Event],
 >(
-  instance: { subtle: { emitter: Emitter } },
+  instance: { subtle: { emitter: Emitter } } | null | undefined,
   event: Event,
   handlerFn: Callback | undefined,
   dependencies?: React.DependencyList
@@ -205,14 +204,15 @@ export function useAgentEvents<
   const callback = dependencies ? wrappedCallback : handlerFn;
 
   useEffect(() => {
-    if (!callback) {
+    const emitter = instance?.subtle.emitter;
+    if (!emitter || !callback) {
       return;
     }
-    instance.subtle.emitter.on(event, callback);
+    emitter.on(event, callback);
     return () => {
-      instance.subtle.emitter.off(event, callback);
+      emitter.off(event, callback);
     };
-  }, [instance.subtle.emitter, event, callback]);
+  }, [instance?.subtle.emitter, event, callback]);
 }
 
 
