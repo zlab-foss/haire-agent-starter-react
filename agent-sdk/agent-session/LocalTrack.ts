@@ -154,20 +154,24 @@ export function createLocalTrack<TrackSource extends Track.Source>(
       options.room.localParticipant.on(eventName, handleParticipantEvent);
     }
 
-    if (mediaDeviceKind !== null && typeof window !== 'undefined') {
+    if (mediaDeviceKind !== null) {
       handleDeviceChange();
-      if (!window.isSecureContext) {
-        throw new Error(
-          `Accessing media devices is available only in secure contexts (HTTPS and localhost), in some or all supporting browsers. See: https://developer.mozilla.org/en-US/docs/Web/API/Navigator/mediaDevices`,
-        );
+
+      if (typeof window !== 'undefined') {
+        if (!window.isSecureContext) {
+          throw new Error(
+            `Accessing media devices is available only in secure contexts (HTTPS and localhost), in some or all supporting browsers. See: https://developer.mozilla.org/en-US/docs/Web/API/Navigator/mediaDevices`,
+          );
+        }
+        navigator?.mediaDevices?.addEventListener('devicechange', handleDeviceChange);
       }
-      navigator?.mediaDevices?.addEventListener('devicechange', handleDeviceChange);
+
+      // When the device changes, refetch devices
+      // This is required because if a user activates a device for the first time, this is what causes
+      // the permission check to occur and after permissions have been granted, the devices list may
+      // now return a non empty list
+      options.room.on(RoomEvent.ActiveDeviceChanged, handleDeviceChange);
     }
-    // When the device changes, refetch devices
-    // This is required because if a user activates a device for the first time, this is what causes
-    // the permission check to occur and after permissions have been granted, the devices list may
-    // now return a non empty list
-    options.room.on(RoomEvent.ActiveDeviceChanged, handleDeviceChange);
   };
 
   const teardown = () => {
