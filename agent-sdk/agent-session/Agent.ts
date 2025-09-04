@@ -13,15 +13,15 @@ export type AgentConversationalState = 'disconnected' | 'initializing' | 'idle' 
 export enum AgentEvent {
   CameraChanged = 'cameraChanged',
   MicrophoneChanged = 'microphoneChanged',
-  AgentAttributesChanged = 'agentAttributesChanged',
-  AgentConversationalStateChanged = 'agentConversationalStateChanged',
+  AttributesChanged = 'attributesChanged',
+  ConversationalStateChanged = 'conversationalStateChanged',
 }
 
 export type AgentCallbacks = {
   [AgentEvent.CameraChanged]: (newTrack: RemoteTrackInstance<Track.Source.Camera> | null) => void;
   [AgentEvent.MicrophoneChanged]: (newTrack: RemoteTrackInstance<Track.Source.Microphone> | null) => void;
-  [AgentEvent.AgentAttributesChanged]: (newAttributes: Record<string, string>) => void;
-  [AgentEvent.AgentConversationalStateChanged]: (newAgentConversationalState: AgentConversationalState) => void;
+  [AgentEvent.AttributesChanged]: (newAttributes: Record<string, string>) => void;
+  [AgentEvent.ConversationalStateChanged]: (newAgentConversationalState: AgentConversationalState) => void;
 };
 
 
@@ -140,11 +140,11 @@ export function createAgent(
       };
 
       const cleanup = () => {
-        emitter.off(AgentEvent.AgentConversationalStateChanged, stateChangedHandler);
+        emitter.off(AgentEvent.ConversationalStateChanged, stateChangedHandler);
         signal?.removeEventListener('abort', abortHandler);
       };
 
-      emitter.on(AgentEvent.AgentConversationalStateChanged, stateChangedHandler);
+      emitter.on(AgentEvent.ConversationalStateChanged, stateChangedHandler);
       signal?.addEventListener('abort', abortHandler);
     });
   };
@@ -191,7 +191,7 @@ export function createAgent(
 
   const handleAttributesChanged = (attributes: Record<string, string>) => {
     set((old) => ({ ...old, attributes }));
-    emitter.emit(AgentEvent.AgentAttributesChanged, attributes);
+    emitter.emit(AgentEvent.AttributesChanged, attributes);
 
     set((old) => generateConversationalStateUpdate(old, old.camera, old.microphone));
   };
@@ -373,7 +373,7 @@ export function createAgent(
     const newConversationalState = generateConversationalState(old.attributes, old.subtle.agentParticipant);
 
     if (old.conversationalState !== newConversationalState) {
-      emitter.emit(AgentEvent.AgentConversationalStateChanged, newConversationalState);
+      emitter.emit(AgentEvent.ConversationalStateChanged, newConversationalState);
     }
     switch (newConversationalState) {
       case 'listening':

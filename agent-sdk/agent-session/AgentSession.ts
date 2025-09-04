@@ -156,7 +156,7 @@ export function createAgentSession(
 
     const { get: agentGet, set: agentSet } = createScopedGetSet(get, set, 'agent', 'AgentSession');
     const agent = createAgent(room, agentGet, agentSet);
-    agent.subtle.emitter.on(AgentEvent.AgentAttributesChanged, handleAgentAttributesChanged);
+    agent.subtle.emitter.on(AgentEvent.AttributesChanged, handleAgentAttributesChanged);
 
     const { get: localGet, set: localSet } = createScopedGetSet(get, set, 'local', 'AgentSession');
     const local = createLocal(room, localGet, localSet);
@@ -191,7 +191,7 @@ export function createAgentSession(
     // old.subtle.agent?.off(AgentEvent.AgentConnectionStateChanged, this.handleAgentConnectionStateChanged);
     // old.subtle.agent?.off(AgentEvent.AgentConversationalStateChanged, this.handleAgentConversationalStateChanged);
     get().agent?.subtle.teardown();
-    get().agent?.subtle.emitter.off(AgentEvent.AgentAttributesChanged, handleAgentAttributesChanged);
+    get().agent?.subtle.emitter.off(AgentEvent.AttributesChanged, handleAgentAttributesChanged);
 
     get().local?.subtle.teardown();
     get().messages?.subtle.teardown();
