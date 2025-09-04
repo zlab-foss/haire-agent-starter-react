@@ -87,7 +87,7 @@ type AgentSessionInstanceCommon = {
 
   agentConnectTimeout: {
     delayInMilliseconds: number;
-    timeoutId: NodeJS.Timeout | null;
+    timeoutId: ReturnType<typeof setTimeout> | null;
   } | null,
 
   prepareConnection: () => Promise<void>,
