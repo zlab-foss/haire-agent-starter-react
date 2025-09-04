@@ -25,8 +25,6 @@ export type AgentCallbacks = {
 };
 
 
-export type AgentAttributes = Record<string, string>;
-
 
 type AgentInstanceCommon = {
   [Symbol.toStringTag]: "AgentInstance";
@@ -41,7 +39,7 @@ type AgentInstanceCommon = {
   waitUntilMicrophone: (signal?: AbortSignal) => Promise<void>;
 
   // FIXME: maybe add some sort of schema to this?
-  attributes: AgentAttributes;
+  attributes: Record<string, string>;
 
   subtle: {
     emitter: TypedEventEmitter<AgentCallbacks>;
@@ -333,7 +331,7 @@ export function createAgent(
     }
   };
 
-  const generateConversationalState = (attributes: AgentAttributes, agentParticipant: RemoteParticipant | null): AgentConversationalState => {
+  const generateConversationalState = (attributes: Record<string, string>, agentParticipant: RemoteParticipant | null): AgentConversationalState => {
     let newConversationalState: AgentConversationalState = 'disconnected';
 
     if (room.state !== ConnectionState.Disconnected) {
