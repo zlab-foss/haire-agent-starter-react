@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { AgentRoomAudioRenderer, AgentStartAudio, AgentVideoTrack, createUseAgentSession } from "@/agent-sdk";
-import { ManualConnectionCredentialsProvider } from "@/agent-sdk/agent-session/ConnectionCredentialsProvider";
+import { ManualConnectionCredentials } from "@/agent-sdk/agent-session/ConnectionCredentialsProvider";
 import { Button } from "./ui/button";
 
 // OR, use a sandbox: new SandboxConnectionCredentialsProvider({ sandboxId: "xxx" })
-const credentials = new ManualConnectionCredentialsProvider(async () => {
+const credentials = new ManualConnectionCredentials(async () => {
   const url = new URL(
     process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? '/api/connection-details',
     window.location.origin

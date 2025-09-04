@@ -4,7 +4,7 @@ import { EventEmitter } from 'events';
 
 import { type ReceivedMessage } from "./message";
 import { AgentConversationalState, AgentEvent, AgentInstance, createAgent } from './Agent';
-import { ConnectionCredentialsProvider } from './ConnectionCredentialsProvider';
+import { ConnectionCredentials } from './ConnectionCredentialsProvider';
 import { ParticipantAttributes } from '../lib/participant-attributes';
 import { createMessages, MessagesInstance } from './Messages';
 import { createLocal, LocalInstance } from './Local';
@@ -38,7 +38,7 @@ export type AgentSessionCallbacks = {
 };
 
 export type AgentSessionOptions = {
-  credentials: ConnectionCredentialsProvider;
+  credentials: ConnectionCredentials;
 };
 
 export type AgentSessionConnectOptions = {
@@ -82,7 +82,7 @@ export type SwitchActiveDeviceOptions = {
 type AgentSessionInstanceCommon = {
   [Symbol.toStringTag]: "AgentSessionInstance",
 
-  credentials: ConnectionCredentialsProvider;
+  credentials: ConnectionCredentials;
 
   /** Returns a promise that resolves once the room connects. */
   waitUntilConnected: (signal?: AbortSignal) => void;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { ConnectionDetails } from '@/app/api/connection-details/route';
-import { ManualConnectionCredentialsProvider } from '@/agent-sdk/agent-session/ConnectionCredentialsProvider';
+import { ManualConnectionCredentials } from '@/agent-sdk/agent-session/ConnectionCredentialsProvider';
 
 export default function useConnectionDetails() {
   // Generate room connection details, including:
@@ -31,7 +31,7 @@ export default function useConnectionDetails() {
   }, []);
 
   const provider = useMemo(
-    () => new ManualConnectionCredentialsProvider(fetchConnectionDetails),
+    () => new ManualConnectionCredentials(fetchConnectionDetails),
     [fetchConnectionDetails],
   );
 
@@ -39,5 +39,5 @@ export default function useConnectionDetails() {
     provider.refresh();
   }, [provider]);
 
-  return { connectionDetailsProvider: provider };
+  return { connectionDetails: provider };
 }

@@ -5,12 +5,12 @@ import { ConnectionDetails } from "@/app/api/connection-details/route";
 const ONE_MINUTE_IN_MILLISECONDS = 60 * 1000;
 
 /**
-  * The ConnectionDetailsProvider handles getting credentials for connecting to a new Room, caching
+  * ConnectionDetails handles getting credentials for connecting to a new Room, caching
   * the last result and using it until it expires. */
-export abstract class ConnectionCredentialsProvider {
+export abstract class ConnectionCredentials {
   private cachedConnectionDetails: ConnectionDetails | null = null;
 
-  private isCachedConnectionDetailsExpired() {
+  protected isCachedConnectionDetailsExpired() {
     const token = this.cachedConnectionDetails?.participantToken;
     if (!token) {
       return true;
@@ -41,7 +41,7 @@ export abstract class ConnectionCredentialsProvider {
   protected abstract fetch(): Promise<ConnectionDetails>;
 };
 
-export class ManualConnectionCredentialsProvider extends ConnectionCredentialsProvider {
+export class ManualConnectionCredentials extends ConnectionCredentials {
   protected fetch: () => Promise<ConnectionDetails>;
 
   constructor(handler: () => Promise<ConnectionDetails>) {
@@ -50,8 +50,27 @@ export class ManualConnectionCredentialsProvider extends ConnectionCredentialsPr
   }
 }
 
+export class LiteralConnectionCredentials extends ConnectionCredentials {
+  payload: ConnectionDetails;
 
-type SandboxConnectionCredentialsProviderOptions = {
+  constructor(payload: ConnectionDetails) {
+    super();
+    this.payload = payload;
+  }
+
+  async fetch() {
+    if (this.isCachedConnectionDetailsExpired()) {
+      // FIXME: figure out a better logging solution?
+      console.warn('WARNING: The credentials within LiteralConnectionCredentials have expired, so any upcoming room connections will fail.');
+    }
+    return this.payload;
+  }
+
+  async refresh() { /* cannot refresh a literal set of credentials! */ }
+}
+
+
+type SandboxConnectionCredentialsOptions = {
   sandboxId: string;
   baseUrl?: string;
 
@@ -63,16 +82,16 @@ type SandboxConnectionCredentialsProviderOptions = {
   participantName?: string;
 };
 
-export class SandboxConnectionCredentialsProvider extends ConnectionCredentialsProvider {
-  protected options: SandboxConnectionCredentialsProviderOptions;
+export class SandboxConnectionCredentials extends ConnectionCredentials {
+  protected options: SandboxConnectionCredentialsOptions;
 
-  constructor(options: SandboxConnectionCredentialsProviderOptions) {
+  constructor(options: SandboxConnectionCredentialsOptions) {
     super();
     this.options = options;
 
     if (process.env.NODE_ENV === 'production') {
       // FIXME: figure out a better logging solution?
-      console.warn('WARNING: SandboxConnectionCredentialsProvider is meant for development, and is not security hardened. In production, implement your own token generation solution.');
+      console.warn('WARNING: SandboxConnectionCredentials is meant for development, and is not security hardened. In production, implement your own token generation solution.');
     }
   }
 
