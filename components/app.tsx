@@ -23,8 +23,12 @@ export function App({ appConfig }: AppProps) {
 
   const [sessionStarted, setSessionStarted] = useState(false);
 
-  useAgentEvents(agentSession, AgentSessionEvent.Disconnected, () => {
-    setSessionStarted(false);
+  useAgentEvents(agentSession, AgentSessionEvent.AgentConnectionStateChanged, (state) => {
+    switch (state) {
+      case "disconnected":
+        setSessionStarted(false);
+        break;
+    }
   }, []);
 
   useAgentEvents(agentSession, AgentSessionEvent.MediaDevicesError, (error) => {

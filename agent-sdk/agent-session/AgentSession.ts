@@ -19,8 +19,6 @@ export enum AgentSessionEvent {
   AgentConversationalStateChanged = 'agentConversationalStateChanged',
   AgentAttributesChanged = 'agentAttributesChanged',
   MessageReceived = 'messageReceived',
-  Connected = 'connected',
-  Disconnected = 'disconnected',
   AgentConnectionFailure = 'agentConnectionFailure',
   AudioPlaybackStatusChanged = 'AudioPlaybackStatusChanged',
   MediaDevicesError = 'MediaDevicesError',
@@ -32,8 +30,6 @@ export type AgentSessionCallbacks = {
   [AgentSessionEvent.MessageReceived]: (newMessage: ReceivedMessage) => void;
   [AgentSessionEvent.AgentConnectionFailure]: (reason: string) => void;
   [AgentSessionEvent.AudioPlaybackStatusChanged]: (audioPlaybackPermitted: boolean) => void;
-  [AgentSessionEvent.Connected]: () => void;
-  [AgentSessionEvent.Disconnected]: () => void;
   [AgentSessionEvent.MediaDevicesError]: (error: Error) => void;
 };
 
@@ -187,8 +183,6 @@ export function createAgentSession(
         },
       };
     });
-
-    emitter.emit(AgentSessionEvent.Connected);
   };
   room.on(RoomEvent.Connected, handleRoomConnected);
 
@@ -210,8 +204,6 @@ export function createAgentSession(
       }
       return { ...old, agentConnectTimeout: null };
     });
-
-    emitter.emit(AgentSessionEvent.Disconnected);
 
     options.credentials.refresh();
   };
@@ -307,7 +299,6 @@ export function createAgentSession(
   const waitUntilConnected = async (signal?: AbortSignal) => {
     return waitUntilConnectionState(
       ConnectionState.Connected, /* FIXME: should I check for other states too? */
-      AgentSessionEvent.Connected,
       signal,
     );
   };
@@ -315,23 +306,21 @@ export function createAgentSession(
   const waitUntilDisconnected = async (signal?: AbortSignal) => {
     return waitUntilConnectionState(
       ConnectionState.Disconnected,
-      AgentSessionEvent.Disconnected,
       signal,
     );
   };
 
-  const waitUntilConnectionState = async (
-    state: ConnectionState,
-    stateMonitoringEvent: keyof AgentSessionCallbacks,
-    signal?: AbortSignal,
-  ) => {
+  const waitUntilConnectionState = async (state: ConnectionState, signal?: AbortSignal) => {
     const { connectionState } = get();
     if (connectionState === state) {
       return;
     }
 
     return new Promise<void>((resolve, reject) => {
-      const onceEventOccurred = () => {
+      const onceEventOccurred = (newState: AgentSessionConnectionState) => {
+        if (newState !== state) {
+          return;
+        }
         cleanup();
         resolve();
       };
@@ -341,11 +330,11 @@ export function createAgentSession(
       };
 
       const cleanup = () => {
-        emitter.off(stateMonitoringEvent, onceEventOccurred);
+        emitter.off(AgentSessionEvent.AgentConnectionStateChanged, onceEventOccurred);
         signal?.removeEventListener('abort', abortHandler);
       };
 
-      emitter.on(stateMonitoringEvent, onceEventOccurred);
+      emitter.on(AgentSessionEvent.AgentConnectionStateChanged, onceEventOccurred);
       signal?.addEventListener('abort', abortHandler);
     });
   };
