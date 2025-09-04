@@ -15,7 +15,7 @@ import { createScopedGetSet } from '../lib/scoped-get-set';
 export type AgentSessionConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'signalReconnecting';
 
 export enum AgentSessionEvent {
-  AgentConnectionStateChanged = 'agentConnectionStateChanged',
+  ConnectionStateChanged = 'agentConnectionStateChanged',
   AgentConversationalStateChanged = 'agentConversationalStateChanged',
   AgentAttributesChanged = 'agentAttributesChanged',
   MessageReceived = 'messageReceived',
@@ -25,7 +25,7 @@ export enum AgentSessionEvent {
 }
 
 export type AgentSessionCallbacks = {
-  [AgentSessionEvent.AgentConnectionStateChanged]: (newAgentConnectionState: AgentSessionConnectionState) => void;
+  [AgentSessionEvent.ConnectionStateChanged]: (newAgentConnectionState: AgentSessionConnectionState) => void;
   [AgentSessionEvent.AgentConversationalStateChanged]: (newAgentConversationalState: AgentConversationalState) => void;
   [AgentSessionEvent.MessageReceived]: (newMessage: ReceivedMessage) => void;
   [AgentSessionEvent.AgentConnectionFailure]: (reason: string) => void;
@@ -330,11 +330,11 @@ export function createAgentSession(
       };
 
       const cleanup = () => {
-        emitter.off(AgentSessionEvent.AgentConnectionStateChanged, onceEventOccurred);
+        emitter.off(AgentSessionEvent.ConnectionStateChanged, onceEventOccurred);
         signal?.removeEventListener('abort', abortHandler);
       };
 
-      emitter.on(AgentSessionEvent.AgentConnectionStateChanged, onceEventOccurred);
+      emitter.on(AgentSessionEvent.ConnectionStateChanged, onceEventOccurred);
       signal?.addEventListener('abort', abortHandler);
     });
   };
@@ -377,7 +377,7 @@ export function createAgentSession(
     const newConnectionState = generateConnectionState(agent);
 
     if (old.connectionState !== newConnectionState) {
-      emitter.emit(AgentSessionEvent.AgentConnectionStateChanged, newConnectionState);
+      emitter.emit(AgentSessionEvent.ConnectionStateChanged, newConnectionState);
     }
 
     switch (newConnectionState) {

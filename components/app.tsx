@@ -23,7 +23,7 @@ export function App({ appConfig }: AppProps) {
 
   const [sessionStarted, setSessionStarted] = useState(false);
 
-  useAgentEvents(agentSession, AgentSessionEvent.AgentConnectionStateChanged, (state) => {
+  useAgentEvents(agentSession, AgentSessionEvent.ConnectionStateChanged, (state) => {
     switch (state) {
       case "disconnected":
         setSessionStarted(false);
