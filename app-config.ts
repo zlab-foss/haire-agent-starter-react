@@ -1,4 +1,22 @@
-import type { AppConfig } from './lib/types';
+export interface AppConfig {
+  pageTitle: string;
+  pageDescription: string;
+  companyName: string;
+
+  supportsChatInput: boolean;
+  supportsVideoInput: boolean;
+  supportsScreenShare: boolean;
+  isPreConnectBufferEnabled: boolean;
+
+  logo: string;
+  startButtonText: string;
+  accent?: string;
+  logoDark?: string;
+  accentDark?: string;
+
+  sandboxId?: string;
+  agentName?: string;
+}
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
   companyName: 'LiveKit',
@@ -15,6 +33,4 @@ export const APP_CONFIG_DEFAULTS: AppConfig = {
   logoDark: '/lk-logo-dark.svg',
   accentDark: '#1fd5f9',
   startButtonText: 'Start call',
-
-  agentName: undefined,
 };
