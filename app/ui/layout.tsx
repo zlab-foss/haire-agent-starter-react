@@ -1,4 +1,3 @@
-import * as React from 'react';
 import { headers } from 'next/headers';
 import Link from 'next/link';
 import { SessionProvider } from '@/components/app/session-provider';
