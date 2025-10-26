@@ -22,15 +22,13 @@ import {
   AudioBarVisualizer,
   audioBarVisualizerVariants,
 } from '@/components/livekit/audio-visualizer/audio-bar-visualizer/audio-bar-visualizer';
-import {
-  AudioGridVisualizer,
-  type GridOptions,
-} from '@/components/livekit/audio-visualizer/audio-grid-visualizer/audio-grid-visualizer';
+import { AudioGridVisualizer } from '@/components/livekit/audio-visualizer/audio-grid-visualizer/audio-grid-visualizer';
 import { gridVariants } from '@/components/livekit/audio-visualizer/audio-grid-visualizer/demos';
 import {
   AudioRadialVisualizer,
   audioRadialVisualizerVariants,
 } from '@/components/livekit/audio-visualizer/audio-radial-visualizer/audio-radial-visualizer';
+import { AudioShaderVisualizer } from '@/components/livekit/audio-visualizer/audio-shader-visualizer/audio-shader-visualizer';
 import { Button, buttonVariants } from '@/components/livekit/button';
 import { ChatEntry } from '@/components/livekit/chat-entry';
 import {
@@ -442,11 +440,11 @@ export const COMPONENTS = {
       'speaking',
     ] as AgentState[];
 
-    const { microphoneTrack, localParticipant } = useLocalParticipant();
     const [rowCount, setRowCount] = useState(rowCounts[0]);
     const [columnCount, setColumnCount] = useState(columnCounts[0]);
     const [state, setState] = useState<AgentState>(states[0]);
     const [demoIndex, setDemoIndex] = useState(0);
+    const { microphoneTrack, localParticipant } = useLocalParticipant();
 
     const micTrackRef = useMemo<TrackReferenceOrPlaceholder | undefined>(() => {
       return state === 'speaking'
@@ -557,6 +555,98 @@ export const COMPONENTS = {
           <pre className="text-muted-foreground text-sm">
             <code>{JSON.stringify(demoOptions, null, 2)}</code>
           </pre>
+        </div>
+      </Container>
+    );
+  },
+
+  AudioShaderVisualizer: () => {
+    const [a, setA] = useState(10);
+    const [b, setB] = useState(0.1);
+    const [c, setC] = useState(0.5);
+    const [d, setD] = useState(0.3);
+    const [e, setE] = useState(0.3);
+    const [f, setF] = useState(0.4);
+    const [g, setG] = useState(1.0);
+    const [h, setH] = useState(0.5);
+    const [i, setI] = useState(0.5);
+
+    // const { microphoneTrack, localParticipant } = useLocalParticipant();
+    // const micTrackRef = useMemo<TrackReferenceOrPlaceholder | undefined>(() => {
+    //   return {
+    //     participant: localParticipant,
+    //     source: Track.Source.Microphone,
+    //     publication: microphoneTrack,
+    //   } as TrackReference;
+    // }, [localParticipant, microphoneTrack]);
+
+    // useMicrophone();
+
+    const fields = [
+      ['speed', a, setA],
+      ['intensity', b, setB],
+      ['amplitude', c, setC],
+      ['frequency', d, setD],
+      ['scale', e, setE],
+      ['blur', f, setF],
+      ['shape', g, setG],
+      ['colorPosition', h, setH],
+      ['colorScale', i, setI],
+    ] as const;
+
+    return (
+      <Container componentName="AudioShaderVisualizer">
+        <div className="grid grid-cols-2 gap-4">
+          <AudioShaderVisualizer
+            speed={a}
+            intensity={b}
+            amplitude={c}
+            frequency={d}
+            scale={e}
+            blur={f}
+            shape={g}
+            test={0.1}
+            colorPosition={h}
+            colorScale={i}
+            // colorPhase={[1.0, 0.0, 0.5]}
+            colorPhase={[0.0, 1.0, 1.0]}
+            // colorPhase={[1.0, 0.3, 0.5]}
+            // colorPhase={[1.0, 0.5, 0.2]}
+            // colorPhase={[0.4, 1.0, 0.4]}
+            // colorPhase={[0.6, 0.4, 1.0]}
+            // colorPhase={[1.0, 1.0, 1.0]}
+            // audioTrack={micTrackRef!}
+          />
+          <div>
+            {fields.map(([name, value, setValue]) => (
+              <div key={name}>
+                <div className="flex items-center justify-between">
+                  <StoryTitle>{name}</StoryTitle>
+                  <div className="text-muted-foreground mb-2 text-xs">{String(value)}</div>
+                </div>
+                <input
+                  type="range"
+                  value={String(value)}
+                  min={0.1}
+                  max={10}
+                  step={0.1}
+                  onChange={(e) => setValue(parseFloat(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+            ))}
+            {/* <div>
+              <StoryTitle>Wave strength</StoryTitle>
+              <input
+                type="range"
+                value={waveStrength}
+                min={0.1}
+                max={10}
+                step={0.1}
+                onChange={(e) => setWaveStrength(parseFloat(e.target.value))}
+              />
+            </div> */}
+          </div>
         </div>
       </Container>
     );
